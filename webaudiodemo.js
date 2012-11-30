@@ -6,40 +6,35 @@ function boot()
 		return;
 	}
 
-	var noteLength = Math.floor(Mixer.SampleRate / 4);
-	var notes =
-	{
-		'A': { frq: 220, len: noteLength },
-		'B': { frq: 247, len: noteLength },
-		'C': { frq: 262, len: noteLength },
-		'D': { frq: 294, len: noteLength },
-		'E': { frq: 330, len: noteLength },
-		'F': { frq: 349, len: noteLength },
-		'G': { frq: 392, len: noteLength },
-	};
-	notes[' '] = { };
-
-	var tracks = 
+	// ----	
+	var scale = [ "D.d.E.F.f.G.g.A.a.B.C c D d E F f G g A a B C'c'D'd'E'F'f'G'g'A'a'B'" ];
+		
+	var refrain = 
 	[
-		'AABBCCDDEEFFGGAA',
+		"G---A---B---B---A---G---",
+		"                        "
 	];
 
-	var pos = 0;	
-	for( var j = 0; j < tracks[0].length; j++ )
+	var middle = 
+	[
+		"G---A---B---B---A---G---",
+		"D B.E c f E D B.E c f E "
+	];
+	
+	var playNote = Synthesizer.TriggerNote;	
+	Synthesizer.TriggerNote = function(track, note)
 	{
-		var step = 0;
-		for( var i = 0; i < tracks.length; i++ )
+		playNote( track, note );
+		if( track == 0 ) // major chords on track 0
 		{
-			var note = notes[tracks[i].charAt(j)];
-			if( note )
-			{
-				if( note.frq )
-				{
-					Mixer.Queue_Audio( new Filter_ADSR( new AS_SineWave( note.frq, note.len, pos ), 0.1, 0.1, 0.7, 0.1 ) );
-				}
-				step = (step<note.len) ? note.len : step;
-			}
+			note.id += 4;
+			playNote( track, note );
+			note.id += 3;
+			playNote( track, note );
 		}
-		pos += step;
 	}
+	
+	Synthesizer.SetADSR( 0,  0.3, 0.2, 0.6, 0.3 );
+	Synthesizer.SetADSR( 1,  0.1, 0.05, 0.4, 0.5 );	
+	Synthesizer.QueueTracks( refrain, refrain, middle, middle );
 }
