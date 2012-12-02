@@ -12,29 +12,21 @@ function boot()
 	var refrain = 
 	[
 		"G---A---B---B---A---G---",
-		"                        "
+		"                        ",
 	];
 
 	var middle = 
 	[
-		"G---A---B---B---A---G---",
-		"D B.E c f E D B.E c f E "
+		"G-----A-----B-----B-----",
+		"B A G B A G B A G B A G ",
 	];
 	
-	var playNote = Synthesizer.TriggerNote;	
-	Synthesizer.TriggerNote = function(track, note)
-	{
-		playNote( track, note );
-		if( track == 0 ) // major chords on track 0
-		{
-			note.id += 4;
-			playNote( track, note );
-			note.id += 3;
-			playNote( track, note );
-		}
-	}
+	Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Pipe );
+	Synthesizer.SetTrackVolume( 0, 1.0 );
+	Synthesizer.SetTrackInstrument( 1, Synthesizer.Instruments.Glock );
+	Synthesizer.SetTrackVolume( 1, 0.4 );
 	
-	Synthesizer.SetADSR( 0,  0.3, 0.2, 0.6, 0.3 );
-	Synthesizer.SetADSR( 1,  0.1, 0.05, 0.4, 0.5 );	
-	Synthesizer.QueueTracks( refrain, refrain, middle, middle );
+	Synthesizer.SetMasterVolume( 0.5 );
+	
+	Synthesizer.QueueTracks( refrain, middle );
 }

@@ -11,15 +11,28 @@ var Mixer =
 var Synthesizer = 
 {
 	SetBaseDuration: 	function( sec )												{},
-	SetADSR: 			function( track, A, D, S, R )								{},
-	TriggerNote: 		function( track, note )										{},
+	SetTrackInstrument:	function( track, instrument )								{},
+	SetTrackVolume:		function( track, volume )									{},
+	SetMasterVolume:	function( volume )											{},
+	
+	Instruments:
+		{			
+			Sine: {},
+			Glock: {},
+			Piano: {},
+		},
+	
 	QueueTracks: 		function()													{},
+
+	CalcEqualTuningFrequency:	function( note )									{},
+	MakeSineWaveHandle:			function( note )									{},
+	ApplyADSR:					function( handle, ADSR )							{}
 };
 
 
 // Audio sources
 function AS_PCM( pcm, delaySamples )											{if(arguments.length){this.__init__.apply(this,arguments);}};
-function AS_SineWave( freq, lengthSamples, delaySamples )						{if(arguments.length){this.__init__.apply(this,arguments);}};
+function AS_SineWave( freq, lengthSamples, delaySamples, phase )				{if(arguments.length){this.__init__.apply(this,arguments);}};
 
 // Audio filters
 function Filter_ADSR( handle, Aprop, Dprop, Svol, Rprop )						{if(arguments.length){this.__init__.apply(this,arguments);}};
@@ -59,7 +72,7 @@ function mix_channel( dest )
 		}
 
 		var runlength = (len-pos);
-		var lenToPending = pending.length ? (pending[0].m_start - (pos + start)) : runlength;
+		var lenToPending = pending.length ? (pending[0].GetStart() - (pos + start)) : runlength;
 		var lenToEndOfActive = active.length ? active[0].GetLeft() : runlength;
 		runlength = (lenToPending < runlength) ? lenToPending : runlength;
 		runlength = (lenToEndOfActive < runlength) ? lenToEndOfActive : runlength;
@@ -72,14 +85,27 @@ function mix_channel( dest )
 		
 		if( active.length )
 		{
+			//var status = '[' + (pos+start) + '] ' + active.length+ ': ';
 			for( var source = 0; source < active.length; source++ )
 			{
 				var buf = active[source];
+				//status += buf.GetLeft() + ' ';
 				for( var i = 0; i < runlength; i++ )
 				{
 					dest[pos+i] += buf.Sample();
 				}
-			} 
+			}
+			/*
+			if( pending.length )
+			{
+				status += ' -';
+				for( var i = 0; i < pending.length; ++i )
+				{
+					status += ' ' + pending[i].GetStart() + '/' + pending[i].GetLength();
+				}
+			}
+			console.log(status);
+			*/
 
 			currentMixSample = runend + start;
 			while( active.length && (active[0].GetLeft() <= 0) )
@@ -101,6 +127,7 @@ AS_PCM.prototype.__init__ = function( data, delay )
 	this.m_start = delay + currentMixSample;
 	this.m_pos = 0;
 	this.m_length = data.length;
+	this.m_volume = 1;
 }
 
 AS_PCM.prototype.onStart = function()
@@ -130,7 +157,12 @@ AS_PCM.prototype.GetLeft = function()
 
 AS_PCM.prototype.Sample = function()
 {
-	return this.m_data[this.m_pos++];
+	return this.m_data[this.m_pos++] * this.m_volume;
+}
+
+AS_PCM.prototype.SetVolume = function(_volume)
+{
+	this.m_volume = _volume;
 }
 
 AS_PCM.prototype.onFinish = function()
@@ -140,18 +172,20 @@ AS_PCM.prototype.onFinish = function()
 
 
 // ----
-AS_SineWave.prototype.__init__ = function(freq, duration, delay)
+AS_SineWave.prototype.__init__ = function(freq, duration, delay, phase)
 {
 	this.m_factor = (freq * 2 * Math.PI) / Mixer.SampleRate;
 	this.m_start = delay + currentMixSample;
-	this.m_pos = 0;
-	this.m_length = duration;
+	this.m_pos = phase || 0;
+	this.m_length = duration + this.m_pos;
+	this.m_volume = 1;
 }
 
 AS_SineWave.prototype.onStart = AS_PCM.prototype.onStart;
 AS_SineWave.prototype.GetStart = AS_PCM.prototype.GetStart;
 AS_SineWave.prototype.GetLeft = AS_PCM.prototype.GetLeft;
 AS_SineWave.prototype.GetPos = AS_PCM.prototype.GetPos;
+AS_SineWave.prototype.SetVolume = AS_PCM.prototype.SetVolume;
 AS_SineWave.prototype.onFinish = AS_PCM.prototype.onFinish;
 
 AS_SineWave.prototype.GetLength = function()
@@ -162,7 +196,7 @@ AS_SineWave.prototype.GetLength = function()
 AS_SineWave.prototype.Sample = function()
 {
 	var p = this.m_pos++;
-	return Math.sin( p * this.m_factor );
+	return Math.sin( p * this.m_factor ) * this.m_volume;
 }
 
 // ----
@@ -183,6 +217,7 @@ Filter_ADSR.prototype.GetLeft = function(){ return this.m_src.GetLeft(); };
 Filter_ADSR.prototype.GetPos = function(){ return this.m_src.GetPos(); };
 Filter_ADSR.prototype.GetLength = function() { return this.m_src.GetLength(); };
 Filter_ADSR.prototype.onFinish = function() { this.m_src.onFinish(); };
+Filter_ADSR.prototype.SetVolume = function(_volume) { this.m_src.SetVolume(_volume); }
 
 Filter_ADSR.prototype.Sample = function()
 {
@@ -214,7 +249,7 @@ Filter_ADSR.prototype.Sample = function()
 Mixer.Queue_Audio = function( handle )
 {
 	pending.push(handle);
-	pending.sort(function(a, b) { return a.m_start - b.m_start; });
+	pending.sort(function(a, b) { return a.GetStart() - b.GetStart(); });
 	return handle;
 }
 
@@ -286,8 +321,10 @@ var baseLength = 0;
 var c12throot2 = Math.pow(2, 1/12);
 var octaveCodes = { "0" : 0, "1" : 1, "2" : 2, "3" : 3, "." : 3, "4" : 4, " " : 4, "-" : 4, "5" : 5, "'" : 5, "6" : 6, "7" : 7, "8" : 8 };
 var A4 = parseNote( 'A4' );
-var ADSR = [];
-var defaultADSR = [ 0.3, 0.2, 0.6, 0.3 ];
+var instruments = [];
+var volumes = [];
+var defaultInstrument = null;
+var masterVolume = 1;
 
 function parseNote( text )
 {
@@ -359,16 +396,46 @@ Synthesizer.SetBaseDuration = function(sec)
 	baseLength = Math.floor(sec * Mixer.SampleRate);
 }
 
-Synthesizer.SetADSR = function( track, A, D, S, R )
+Synthesizer.SetTrackInstrument = function( track, desc )
 {
-	ADSR[track] = [ A, D, S, R ];
+	instruments[track] = desc;
 }
 
-Synthesizer.TriggerNote = function(track, desc)
+Synthesizer.SetTrackVolume = function( track, volume )
 {
-	var freq = 440 * freqRatio( desc.id, A4 );
-	var adsr = ADSR[track] || defaultADSR;
-	Mixer.Queue_Audio( new Filter_ADSR( new AS_SineWave( freq, desc.len, desc.start ), adsr[0], adsr[1], adsr[2], adsr[3] ) );
+	while( volumes.length < track )
+	{
+		volumes.push(1);
+	}
+	volumes[track] = volume;
+}
+
+Synthesizer.SetMasterVolume = function( volume )
+{
+	masterVolume = volume;
+}
+
+Synthesizer.CalcEqualTuningFrequency = function( desc )
+{
+	return (440 * freqRatio( desc.id, A4 ));
+}
+
+Synthesizer.MakeSineWaveHandle = function( desc )
+{
+	var freq = desc.freq || Synthesizer.CalcEqualTuningFrequency(desc);
+	return new AS_SineWave( freq, desc.len, desc.start, desc.phase );
+}
+
+Synthesizer.ApplyADSR = function( handle, adsr )
+{
+	return new Filter_ADSR( handle, adsr[0], adsr[1], adsr[2], adsr[3] )
+}
+
+function TriggerNote(track, note)
+{
+	var instrument = instruments[track] || defaultInstrument;
+	//console.log( '{' + note.start + '} ' + track + ': ' + note.id + ' / ' + note.len );
+	instrument.Play( note, masterVolume * volumes[track] );
 }
 
 Synthesizer.QueueTracks = function()
@@ -393,6 +460,11 @@ Synthesizer.QueueTracks = function()
 	{
 		open[i] = null;
 	}
+	
+	while( volumes.length < tracks.length )
+	{
+		volumes.push(1);
+	}	
 
 	for( var j = 0; j < tracks[0].length / 2; j++ )
 	{
@@ -410,7 +482,7 @@ Synthesizer.QueueTracks = function()
 			{
 				if( open[i] ) 
 				{ 
-					Synthesizer.TriggerNote( i, open[i] );
+					TriggerNote( i, open[i] );
 					open[i] = null;
 				}
 				
@@ -428,10 +500,71 @@ Synthesizer.QueueTracks = function()
 	{
 		if( open[i] ) 
 		{ 
-			Synthesizer.TriggerNote( i, open[i] );
+			TriggerNote( i, open[i] );
 		}
 	}
 }
+
+// ---
+
+Synthesizer.Instruments.Sine = (function(){
+	var ADSR = [ 0.05, 0, 1, 0.05 ];
+	
+return {
+	Name: 'Sine',
+	'ADSR': ADSR,
+	Play: function( note, volume )
+	{
+		var handle = Synthesizer.MakeSineWaveHandle( note );
+		handle.SetVolume( volume );
+		Mixer.Queue_Audio( Synthesizer.ApplyADSR( handle, ADSR ) );
+	}
+};
+})();
+
+Synthesizer.Instruments.Glock = (function(){
+	var ADSR = [ 0.02, 0.1, 0.4, 0.4 ];
+
+return {
+	Name: 'Glock',
+	'ADSR': ADSR,
+	Play: function( note, volume )
+	{
+		for( var i = 0; i < 4; i++ )
+		{
+			note.phase = i*10;
+			var handle = Synthesizer.ApplyADSR( Synthesizer.MakeSineWaveHandle( note ), ADSR );
+			handle.SetVolume( Math.pow(2,-i) * volume );
+			Mixer.Queue_Audio( handle );
+			note.freq *= 2;
+		}
+	}
+};
+})();
+
+Synthesizer.Instruments.Pipe = (function(){
+	var ADSR = [ 0.2, 0.3, 0.6, 0.01 ];
+
+return {
+	Name: 'Pipe',
+	'ADSR': ADSR,
+	Play: function( note, volume )
+	{
+		var freq = note.freq;
+		for( var i = 0; i < 3; i++ )
+		{
+			note.phase = i*10;
+			note.freq = freq * Math.pow( 3, i );
+			var handle = Synthesizer.ApplyADSR( Synthesizer.MakeSineWaveHandle( note ), ADSR );
+			handle.SetVolume( 0.3 * volume );
+			Mixer.Queue_Audio( handle );
+		}
+	}
+};
+})();
+
+
+defaultInstrument = Synthesizer.Instruments.Glock;
 
 
 })();
