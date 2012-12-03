@@ -12,7 +12,7 @@ function boot()
 	var refrain = 
 	[
 		"G---A---B---B---A---G---",
-		"                        ",
+		"  G   A   B             ",
 	];
 
 	var middle = 
@@ -21,7 +21,7 @@ function boot()
 		"B A G B A G B A G B A G ",
 	];
 	
-	Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Pipe );
+	Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Glock );
 	Synthesizer.SetTrackVolume( 0, 1.0 );
 	Synthesizer.SetTrackInstrument( 1, Synthesizer.Instruments.Glock );
 	Synthesizer.SetTrackVolume( 1, 0.4 );

@@ -1,7 +1,7 @@
 var Mixer = 
 {
 	Init: function()													{},
-	Queue_Audio: function( handle )										{},
+	Queue_Audio: function( handle, delay )								{},
 
 	SampleRate: 0,
 	Channels: 1,
@@ -31,11 +31,12 @@ var Synthesizer =
 
 
 // Audio sources
-function AS_PCM( pcm, delaySamples )											{if(arguments.length){this.__init__.apply(this,arguments);}};
-function AS_SineWave( freq, lengthSamples, delaySamples, phase )				{if(arguments.length){this.__init__.apply(this,arguments);}};
+function AS_PCM( pcm )																{if(arguments.length){this.__init__.apply(this,arguments);}};
+function AS_SineWave( freq, lengthSamples, phase )									{if(arguments.length){this.__init__.apply(this,arguments);}};
 
 // Audio filters
-function Filter_ADSR( handle, Aprop, Dprop, Svol, Rprop )						{if(arguments.length){this.__init__.apply(this,arguments);}};
+function Filter_ADSR( handle, Aprop, Dprop, Svol, Rprop )							{if(arguments.length){this.__init__.apply(this,arguments);}};
+function Filter_Mix()																{if(arguments.length){this.__init__.apply(this,arguments);}};
 
 // ---------------------------------------------
 (function(){
@@ -47,84 +48,18 @@ var mozAudio = null;
 var mozAudioBuffer = null;
 var mozAS_PCMOffset = 0;
 
-var currentMixSample = 0;
-var active = [];
-var pending = [];
+var master_mixer = null;
 
 // ----
 function mix_channel( dest )
 {
-	var len = dest.length;	
-	var start = currentMixSample;
-	var pos = 0;
-	while( pos < len )
-	{
-		if( pending.length && (pending[0].GetStart() <= (pos + start) ) )
-		{
-			do
-			{
-				var obj = pending.shift();
-				obj.onStart();
-				active.push( obj );
-			} while( pending.length && (pending[0].GetStart() <= (pos + start) ) );
-
-			active.sort( function(a,b) { return a.GetLeft() - b.GetLeft(); } );
-		}
-
-		var runlength = (len-pos);
-		var lenToPending = pending.length ? (pending[0].GetStart() - (pos + start)) : runlength;
-		var lenToEndOfActive = active.length ? active[0].GetLeft() : runlength;
-		runlength = (lenToPending < runlength) ? lenToPending : runlength;
-		runlength = (lenToEndOfActive < runlength) ? lenToEndOfActive : runlength;
-		runend = pos + runlength;
-		
-		for( var i = pos; i < runend; i++ )
-		{
-			dest[i] = 0;
-		}
-		
-		if( active.length )
-		{
-			//var status = '[' + (pos+start) + '] ' + active.length+ ': ';
-			for( var source = 0; source < active.length; source++ )
-			{
-				var buf = active[source];
-				//status += buf.GetLeft() + ' ';
-				for( var i = 0; i < runlength; i++ )
-				{
-					dest[pos+i] += buf.Sample();
-				}
-			}
-			/*
-			if( pending.length )
-			{
-				status += ' -';
-				for( var i = 0; i < pending.length; ++i )
-				{
-					status += ' ' + pending[i].GetStart() + '/' + pending[i].GetLength();
-				}
-			}
-			console.log(status);
-			*/
-
-			currentMixSample = runend + start;
-			while( active.length && (active[0].GetLeft() <= 0) )
-			{
-				active.shift().onFinish();
-			}
-		}
-		
-		pos = runend;
-	}
-
-	currentMixSample = (active.length || pending.length ) ? len + start : 0;
+	master_mixer.Render( dest, 0, dest.length );
 }
 
 // ----
-AS_PCM.prototype.__init__ = function( data, delay )
+AS_PCM.prototype.__init__ = function( data )
 {
 	this.m_data = data;
-	this.m_start = delay + currentMixSample;
 	this.m_pos = 0;
 	this.m_length = data.length;
 	this.m_volume = 1;
@@ -132,12 +67,6 @@ AS_PCM.prototype.__init__ = function( data, delay )
 
 AS_PCM.prototype.onStart = function()
 {
-	this.m_pos = currentMixSample - this.m_start;
-}
-
-AS_PCM.prototype.GetStart = function()
-{
-	return this.m_start;
 }
 
 AS_PCM.prototype.GetLength = function()
@@ -155,9 +84,17 @@ AS_PCM.prototype.GetLeft = function()
 	return this.m_length - this.m_pos;
 }
 
-AS_PCM.prototype.Sample = function()
+AS_PCM.prototype.Render = function( _dest, _start, _len )
 {
-	return this.m_data[this.m_pos++] * this.m_volume;
+	var end = _start + ((_len <= GetLeft()) ? _len : GetLeft());
+	var volume = this.m_volume;
+	var data = this.m_data;
+	var pos = this.m_pos;
+	for( var i = _start; i < end; i++ )
+	{
+		_dest[i] = data[pos++] * volume;
+	}
+	this.m_pos = pos;
 }
 
 AS_PCM.prototype.SetVolume = function(_volume)
@@ -172,17 +109,15 @@ AS_PCM.prototype.onFinish = function()
 
 
 // ----
-AS_SineWave.prototype.__init__ = function(freq, duration, delay, phase)
+AS_SineWave.prototype.__init__ = function(freq, duration, phase)
 {
 	this.m_factor = (freq * 2 * Math.PI) / Mixer.SampleRate;
-	this.m_start = delay + currentMixSample;
 	this.m_pos = phase || 0;
 	this.m_length = duration + this.m_pos;
 	this.m_volume = 1;
 }
 
 AS_SineWave.prototype.onStart = AS_PCM.prototype.onStart;
-AS_SineWave.prototype.GetStart = AS_PCM.prototype.GetStart;
 AS_SineWave.prototype.GetLeft = AS_PCM.prototype.GetLeft;
 AS_SineWave.prototype.GetPos = AS_PCM.prototype.GetPos;
 AS_SineWave.prototype.SetVolume = AS_PCM.prototype.SetVolume;
@@ -193,10 +128,17 @@ AS_SineWave.prototype.GetLength = function()
 	return this.m_length;
 }
 
-AS_SineWave.prototype.Sample = function()
+AS_SineWave.prototype.Render = function( _dest, _start, _len )
 {
-	var p = this.m_pos++;
-	return Math.sin( p * this.m_factor ) * this.m_volume;
+	var end = _start + ((_len <= this.GetLeft()) ? _len : this.GetLeft());
+	var volume = this.m_volume;
+	var pos = this.m_pos;
+	var factor = this.m_factor;
+	for( var i = _start; i < end; i++ )
+	{
+		_dest[i] = Math.sin( (pos++) * factor ) * volume;
+	}
+	this.m_pos = pos;
 }
 
 // ----
@@ -212,45 +154,187 @@ Filter_ADSR.prototype.__init__ = function( handle, Alen, Dlen, Svol, Rlen )
 }
 
 Filter_ADSR.prototype.onStart = function(){ this.m_src.onStart(); };
-Filter_ADSR.prototype.GetStart = function(){ return this.m_src.GetStart(); };
 Filter_ADSR.prototype.GetLeft = function(){ return this.m_src.GetLeft(); };
 Filter_ADSR.prototype.GetPos = function(){ return this.m_src.GetPos(); };
 Filter_ADSR.prototype.GetLength = function() { return this.m_src.GetLength(); };
 Filter_ADSR.prototype.onFinish = function() { this.m_src.onFinish(); };
 Filter_ADSR.prototype.SetVolume = function(_volume) { this.m_src.SetVolume(_volume); }
 
-Filter_ADSR.prototype.Sample = function()
+Filter_ADSR.prototype.Render = function( _dest, _start, _len )
 {
-	var pos = (this.m_src.GetPos() / this.m_src.GetLength());
-	pos = (pos < 0) ? 0 : ((pos > 1) ? 1 : pos);
-	var sample = this.m_src.Sample();
+	var length = this.m_src.GetLength();
+	var Aendf = this.m_Aend;
+	var Dendf = this.m_Dend;
+	var Sendf = this.m_Send;
+	var Aend = Math.floor(length * Aendf);
+	var Dend = Math.floor(length * Dendf);
+	var Send = Math.floor(length * Sendf);
 	
-	if( pos <= this.m_Aend )
-	{
-		sample *= (pos / this.m_Aend);
+	var pos = this.m_src.GetPos();
+	var end = pos + _len;
+	end = (length < end) ? length : end;
+	
+	this.m_src.Render( _dest, _start, _len );
+	
+	Aend = (end < Aend) ? end : Aend;
+	Dend = (end < Dend) ? end : Dend;
+	Send = (end < Send) ? end : Send;
+	
+	var dpos = _start;
+
+	for(  ; pos < Aend; pos++ )
+	{		
+		_dest[dpos++] *= (pos/length) / Aendf;
 	}
-    else if( pos <= this.m_Dend )
+	
+	var Dlen = this.m_Dlen;
+	var Svol = this.m_Svol;
+	for(  ; pos < Dend; pos++ )
+	{		
+		_dest[dpos++] *= (1-(((pos/length) - Aendf) / Dlen)) * (1-Svol) + Svol;
+	}
+	
+	for(  ; pos < Send; pos++ )
 	{
-		sample *= (1-((pos - this.m_Aend) / this.m_Dlen)) * (1-this.m_Svol) + this.m_Svol;
-	} 
-	else if( pos <= this.m_Send )
+		_dest[dpos++] *= Svol;
+	}
+	
+	var Rlen = this.m_Rlen;
+	for(  ; pos < end; pos++ )
 	{
-		sample *= this.m_Svol;
+		_dest[dpos++] *= (1-(((pos/length) - Sendf) / Rlen)) * Svol;
+	}	
+}
+
+// ----
+
+// ----
+Filter_Mix.prototype.__init__ = function()
+{
+	this.m_sources = arguments;
+	this.m_tmp = new Float32Array( Mixer.BufferLength );
+	
+	this.m_active = [ ];
+	this.m_pending = [ ];
+	for( var i = 0; i < arguments.length; i++ )
+	{
+		if( arguments[i] )
+		{
+			this.m_pending.push( arguments[i].length ? arguments[i] : [0, arguments[i]] );
+		}
+	}
+	this.m_pending.sort(function(a, b) { return a[0] - b[0]; });
+		
+	this.m_length = 0;
+	this.m_pos = 0;
+	this.m_volume = 1;
+	
+	for( var i = 0; i < this.m_pending.length; i++ )
+	{
+		var len =  this.m_pending[i][0] + this.m_pending[i][1].GetLength();
+		this.m_length = (len > this.m_length) ? len : this.m_length;
+	}
+}
+
+Filter_Mix.prototype.onStart = function(){ };
+Filter_Mix.prototype.GetLeft = function(){ return this.m_length - this.m_pos; };
+Filter_Mix.prototype.GetPos = function(){ return this.m_pos; };
+Filter_Mix.prototype.GetLength = function() { return this.m_length; };
+Filter_Mix.prototype.onFinish = function() { };
+Filter_Mix.prototype.SetVolume = function(_volume) { this.m_volume = _volume; }
+
+Filter_Mix.prototype.Queue_Audio = function(handle, delay)
+{
+	this.m_pending.push([ this.m_pos + (delay||0), handle ]);
+	this.m_pending.sort(function(a, b) { return a[0] - b[0]; });
+
+	var len = delay + handle.GetLength();
+	this.m_length = ( len > this.m_length ) ? len : this.m_length;
+	
+	return handle;
+}
+
+Filter_Mix.prototype.Render = function( dest, _start, _len )
+{
+	var pos = this.m_pos;
+	var end = pos + _len;
+	
+	var dpos = _start;
+	var temp = this.m_tmp;
+	
+	var pending = this.m_pending;
+	var active = this.m_active;
+			
+	while( pos < end )
+	{
+		if( pending.length && (pending[0][0] <= pos ) )
+		{
+			do
+			{
+				var obj = (pending.shift())[1];
+				obj.onStart( this );
+				active.push( obj );
+			} while( pending.length && (pending[0][0] <= pos ) );
+
+			active.sort( function(a,b) { return a.GetLeft() - b.GetLeft(); } );
+		}
+
+		var runlength = (end-pos);
+		var lenToPending = pending.length ? (pending[0][0] - pos) : runlength;
+		var lenToEndOfActive = active.length ? active[0].GetLeft() : runlength;
+		runlength = (lenToPending < runlength) ? lenToPending : runlength;
+		runlength = (lenToEndOfActive < runlength) ? lenToEndOfActive : runlength;
+		destrunend = dpos + runlength;
+		
+		for( var i = dpos; i < destrunend; i++ )
+		{
+			dest[i] = 0;
+		}
+		
+		pos += runlength;
+		this.m_pos = pos;
+		
+		if( active.length )
+		{
+			for( var source = 0; source < active.length; source++ )
+			{
+				active[source].Render( temp, dpos, runlength );
+				for( var i = dpos; i < destrunend; i++ )
+				{
+					dest[i] += temp[i];
+				}
+			}
+			
+			var volume = this.m_volume;
+			for( var i = dpos; i < destrunend; i++ )
+			{
+				dest[i] *= volume;
+			}
+
+			while( active.length && (active[0].GetLeft() <= 0) )
+			{
+				active.shift().onFinish(this);
+			}				
+		}
+		
+		dpos += runlength;	
+	}
+
+	if( active.length || pending.length )
+	{	
+		this.m_pos = pos;
 	}
 	else
 	{
-		sample *= (1-((pos - this.m_Send) / this.m_Rlen)) * this.m_Svol;
+		this.m_pos = 0;
+		this.m_length = 0;
 	}
-	return sample;
 }
 
-
 // ----
-Mixer.Queue_Audio = function( handle )
+Mixer.Queue_Audio = function( handle, delay )
 {
-	pending.push(handle);
-	pending.sort(function(a, b) { return a.GetStart() - b.GetStart(); });
-	return handle;
+	return master_mixer.Queue_Audio( handle, delay );
 }
 
 // ----
@@ -307,6 +391,11 @@ Mixer.Init = function()
 		{
 			ok = 0;
 		}
+	}
+	
+	if( ok )
+	{
+		master_mixer = new Filter_Mix( null );
 	}
 
 	return ok;
@@ -423,7 +512,7 @@ Synthesizer.CalcEqualTuningFrequency = function( desc )
 Synthesizer.MakeSineWaveHandle = function( desc )
 {
 	var freq = desc.freq || Synthesizer.CalcEqualTuningFrequency(desc);
-	return new AS_SineWave( freq, desc.len, desc.start, desc.phase );
+	return new AS_SineWave( freq, desc.len, desc.phase );
 }
 
 Synthesizer.ApplyADSR = function( handle, adsr )
@@ -434,7 +523,6 @@ Synthesizer.ApplyADSR = function( handle, adsr )
 function TriggerNote(track, note)
 {
 	var instrument = instruments[track] || defaultInstrument;
-	//console.log( '{' + note.start + '} ' + track + ': ' + note.id + ' / ' + note.len );
 	instrument.Play( note, masterVolume * volumes[track] );
 }
 
@@ -517,7 +605,7 @@ return {
 	{
 		var handle = Synthesizer.MakeSineWaveHandle( note );
 		handle.SetVolume( volume );
-		Mixer.Queue_Audio( Synthesizer.ApplyADSR( handle, ADSR ) );
+		Mixer.Queue_Audio( Synthesizer.ApplyADSR( handle, ADSR ), note.start );
 	}
 };
 })();
@@ -530,14 +618,16 @@ return {
 	'ADSR': ADSR,
 	Play: function( note, volume )
 	{
+		mix = new Filter_Mix( null );
 		for( var i = 0; i < 4; i++ )
 		{
-			note.phase = i*10;
-			var handle = Synthesizer.ApplyADSR( Synthesizer.MakeSineWaveHandle( note ), ADSR );
+			var handle = Synthesizer.MakeSineWaveHandle( note );
 			handle.SetVolume( Math.pow(2,-i) * volume );
-			Mixer.Queue_Audio( handle );
+			mix.Queue_Audio( handle, 0 );
 			note.freq *= 2;
 		}
+		
+		Mixer.Queue_Audio( Synthesizer.ApplyADSR( mix, ADSR ), note.start );
 	}
 };
 })();
@@ -550,15 +640,17 @@ return {
 	'ADSR': ADSR,
 	Play: function( note, volume )
 	{
+		mix = new Filter_Mix( null );
 		var freq = note.freq;
 		for( var i = 0; i < 3; i++ )
 		{
-			note.phase = i*10;
 			note.freq = freq * Math.pow( 3, i );
-			var handle = Synthesizer.ApplyADSR( Synthesizer.MakeSineWaveHandle( note ), ADSR );
+			var handle = Synthesizer.MakeSineWaveHandle( note );
 			handle.SetVolume( 0.3 * volume );
-			Mixer.Queue_Audio( handle );
+			mix.Queue_Audio( handle, 0 );
 		}
+		
+		Mixer.Queue_Audio( Synthesizer.ApplyADSR( mix, ADSR ), note.start );
 	}
 };
 })();
