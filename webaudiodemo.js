@@ -20,13 +20,31 @@ function boot()
 		"G-----A-----B-----B-----",
 		"B A G B A G B A G B A G ",
 	];
-	
+		
+	Synthesizer.SetBaseDuration( 1/2 );
 	Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Glock );
 	Synthesizer.SetTrackVolume( 0, 1.0 );
 	Synthesizer.SetTrackInstrument( 1, Synthesizer.Instruments.Glock );
-	Synthesizer.SetTrackVolume( 1, 0.4 );
+	Synthesizer.SetTrackVolume( 1, 1.0 );
 	
-	Synthesizer.SetMasterVolume( 0.5 );
+	Mixer.SetVolume( 0.5 );
 	
-	Synthesizer.QueueTracks( refrain, middle );
+	var afidintro = 
+	[
+		"A'",
+		"E ",
+		
+		"C ",
+		"A.",
+	];
+	
+	var afid =
+	[//  |       |       |       |       |
+		"A'--A'A'B'--    C'B'C'D'C'--B'A'",
+		"E --E C E --E --E E E F E --E C ",
+		"C --A A G.--B --  B   A A --G.A ",
+		"A.--C.A.E.--G.--  G.  D.E.--E.F.",
+	];
+	
+	Synthesizer.QueueTracks( afidintro, afid, afid );
 }

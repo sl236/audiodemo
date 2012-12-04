@@ -1,6 +1,7 @@
 var Mixer = 
 {
 	Init: function()													{},
+	SetVolume:	function( volume )										{},
 	Queue_Audio: function( handle, delay )								{},
 
 	SampleRate: 0,
@@ -13,7 +14,6 @@ var Synthesizer =
 	SetBaseDuration: 	function( sec )												{},
 	SetTrackInstrument:	function( track, instrument )								{},
 	SetTrackVolume:		function( track, volume )									{},
-	SetMasterVolume:	function( volume )											{},
 	
 	Instruments:
 		{			
@@ -51,17 +51,10 @@ var mozAS_PCMOffset = 0;
 var master_mixer = null;
 
 // ----
-function mix_channel( dest )
-{
-	master_mixer.Render( dest, 0, dest.length );
-}
-
-// ----
 AS_PCM.prototype.__init__ = function( data )
 {
 	this.m_data = data;
 	this.m_pos = 0;
-	this.m_length = data.length;
 	this.m_volume = 1;
 }
 
@@ -81,19 +74,31 @@ AS_PCM.prototype.GetPos = function()
 
 AS_PCM.prototype.GetLeft = function()
 {
-	return this.m_length - this.m_pos;
+	return this.GetLength() - this.GetPos();
 }
 
 AS_PCM.prototype.Render = function( _dest, _start, _len )
 {
-	var end = _start + ((_len <= GetLeft()) ? _len : GetLeft());
+	var pos = this.m_pos;	
+	var dpos = _start;
+	
+	var len = this.GetLeft();
+	var dend = dpos + ((_len < len) ? _len : len);
+	
 	var volume = this.m_volume;
 	var data = this.m_data;
-	var pos = this.m_pos;
-	for( var i = _start; i < end; i++ )
+		
+	for( ; dpos < dend; dpos++ )
 	{
-		_dest[i] = data[pos++] * volume;
+		_dest[dpos] = data[pos++] * volume;
 	}
+	
+	dend = _start + _len;
+	for( ; dpos < dend; dpos++ )
+	{
+		_dest[dpos] = 0;
+	}
+	
 	this.m_pos = pos;
 }
 
@@ -134,9 +139,14 @@ AS_SineWave.prototype.Render = function( _dest, _start, _len )
 	var volume = this.m_volume;
 	var pos = this.m_pos;
 	var factor = this.m_factor;
-	for( var i = _start; i < end; i++ )
+	var dpos = _start;
+	for( ; dpos < end; dpos++ )
 	{
-		_dest[i] = Math.sin( (pos++) * factor ) * volume;
+		_dest[dpos] = Math.sin( (pos++) * factor ) * volume;
+	}
+	for( ; dpos < _len; dpos++ )
+	{
+		_dest[dpos] = 0;
 	}
 	this.m_pos = pos;
 }
@@ -212,7 +222,6 @@ Filter_ADSR.prototype.Render = function( _dest, _start, _len )
 Filter_Mix.prototype.__init__ = function()
 {
 	this.m_sources = arguments;
-	this.m_tmp = new Float32Array( Mixer.BufferLength );
 	
 	this.m_active = [ ];
 	this.m_pending = [ ];
@@ -256,6 +265,11 @@ Filter_Mix.prototype.Queue_Audio = function(handle, delay)
 
 Filter_Mix.prototype.Render = function( dest, _start, _len )
 {
+	if( (!this.m_tmp) || (this.m_tmp.length < (_start+_len)) )
+	{
+		this.m_tmp = new Float32Array( _start+_len );
+	}
+	
 	var pos = this.m_pos;
 	var end = pos + _len;
 	
@@ -337,11 +351,18 @@ Mixer.Queue_Audio = function( handle, delay )
 	return master_mixer.Queue_Audio( handle, delay );
 }
 
+Mixer.SetVolume = function( volume )
+{
+	master_mixer.SetVolume( volume );
+}
+
 // ----
 Mixer.Init = function()
 {
 	var ok = 0;
 	Mixer.Channels = 1;
+	
+	master_mixer = new Filter_Mix( null );
 
 	try
 	{
@@ -352,7 +373,8 @@ Mixer.Init = function()
 		webAudioContextJSNode = webAudioContextJSNode || webAudioContext.createJavaScriptNode(Mixer.BufferLength, 0, Mixer.Channels);
 		webAudioContextJSNode.onaudioprocess = function(e)
 		{
-			mix_channel(e.outputBuffer.getChannelData(0));
+			var dest = e.outputBuffer.getChannelData(0);
+			master_mixer.Render( dest, 0, dest.length );
 		};		
 		webAudioContextJSNode.connect(webAudioContext.destination);
 		ok = 1;
@@ -372,15 +394,24 @@ Mixer.Init = function()
 			{
 				mozAudio = new Audio();
 				mozAudio.mozSetup( Mixer.Channels, Mixer.SampleRate );
+				
+				master_mixer.Render( mozAudioBuffer, 0, mozAudioBuffer.length );
 
 				setInterval( function() 
 				{		
 					var ofs = mozAS_PCMOffset;
-					ofs += mozAudio.mozWriteAudio( mozAudioBuffer.subarray(ofs) );
+					var len = mozAudio.mozWriteAudio( mozAudioBuffer.subarray(ofs) );										
+					
+					master_mixer.Render( mozAudioBuffer, ofs, len );
+					ofs += len;
+					
 					if( ofs >= Mixer.BufferLength )
 					{
-						mix_channel( mozAudioBuffer );
-						ofs = mozAudio.mozWriteAudio( mozAudioBuffer );
+						ofs = 0;
+						len = mozAudio.mozWriteAudio( mozAudioBuffer.subarray(ofs) );
+						
+						master_mixer.Render( mozAudioBuffer, ofs, len );
+						ofs += len;
 					}
 					mozAS_PCMOffset = ofs;
 				}, Math.floor(Mixer.BufferLength * 250 / Mixer.SampleRate) );
@@ -393,9 +424,13 @@ Mixer.Init = function()
 		}
 	}
 	
-	if( ok )
+	if( !ok )
 	{
-		master_mixer = new Filter_Mix( null );
+		master_mixer = 
+		{
+			Queue_Audio: function() {},
+			SetVolume: function() {},		
+		};
 	}
 
 	return ok;
@@ -413,7 +448,6 @@ var A4 = parseNote( 'A4' );
 var instruments = [];
 var volumes = [];
 var defaultInstrument = null;
-var masterVolume = 1;
 
 function parseNote( text )
 {
@@ -499,11 +533,6 @@ Synthesizer.SetTrackVolume = function( track, volume )
 	volumes[track] = volume;
 }
 
-Synthesizer.SetMasterVolume = function( volume )
-{
-	masterVolume = volume;
-}
-
 Synthesizer.CalcEqualTuningFrequency = function( desc )
 {
 	return (440 * freqRatio( desc.id, A4 ));
@@ -523,7 +552,7 @@ Synthesizer.ApplyADSR = function( handle, adsr )
 function TriggerNote(track, note)
 {
 	var instrument = instruments[track] || defaultInstrument;
-	instrument.Play( note, masterVolume * volumes[track] );
+	instrument.Play( note, volumes[track] );
 }
 
 Synthesizer.QueueTracks = function()
@@ -612,45 +641,73 @@ return {
 
 Synthesizer.Instruments.Glock = (function(){
 	var ADSR = [ 0.02, 0.1, 0.4, 0.4 ];
+	
+	var cache = [ ];
 
 return {
 	Name: 'Glock',
 	'ADSR': ADSR,
 	Play: function( note, volume )
 	{
-		mix = new Filter_Mix( null );
-		for( var i = 0; i < 4; i++ )
-		{
-			var handle = Synthesizer.MakeSineWaveHandle( note );
-			handle.SetVolume( Math.pow(2,-i) * volume );
-			mix.Queue_Audio( handle, 0 );
-			note.freq *= 2;
+		var tag = note.id + '/' + note.len + '/' + ADSR[0] + '/' + ADSR[1] + '/' + ADSR[2] + '/' + ADSR[3];
+		
+		if( !cache[tag] )
+		{			
+			var mix = new Filter_Mix( null );
+			var freq = note.freq;
+			for( var i = 0; i < 5; i++ )
+			{
+				note.freq = freq * Math.pow( 2, i );
+				var handle = Synthesizer.MakeSineWaveHandle( note );
+				handle.SetVolume( Math.pow(2,-i) );
+				mix.Queue_Audio( handle, 0 );
+			}
+			mix = Synthesizer.ApplyADSR( mix, ADSR );
+			cache[tag] = new Float32Array( mix.GetLength() );
+			mix.Render( cache[tag], 0, mix.GetLength() );
 		}
 		
-		Mixer.Queue_Audio( Synthesizer.ApplyADSR( mix, ADSR ), note.start );
+		var handle = new AS_PCM( cache[tag] );
+		handle.SetVolume( volume );
+		
+		Mixer.Queue_Audio( handle, note.start );
 	}
 };
 })();
 
 Synthesizer.Instruments.Pipe = (function(){
-	var ADSR = [ 0.2, 0.3, 0.6, 0.01 ];
+	var ADSR = [ 0.2, 0.3, 0.5, 0.01 ];
+	
+	var cache = [ ];
 
 return {
 	Name: 'Pipe',
 	'ADSR': ADSR,
 	Play: function( note, volume )
 	{
-		mix = new Filter_Mix( null );
-		var freq = note.freq;
-		for( var i = 0; i < 3; i++ )
-		{
-			note.freq = freq * Math.pow( 3, i );
-			var handle = Synthesizer.MakeSineWaveHandle( note );
-			handle.SetVolume( 0.3 * volume );
-			mix.Queue_Audio( handle, 0 );
+		var tag = note.id + '/' + note.len + '/' + ADSR[0] + '/' + ADSR[1] + '/' + ADSR[2] + '/' + ADSR[3];
+		
+		if( !cache[tag] )
+		{			
+			var mix = new Filter_Mix( null );
+			var freq = note.freq;
+			for( var i = 0; i < 5; i++ )
+			{
+				note.freq = freq * Math.pow( 3, i );
+				var handle = Synthesizer.MakeSineWaveHandle( note );
+				handle.SetVolume( Math.pow(2, -(i+2)) );
+				mix.Queue_Audio( handle, 0 );
+			}
+			
+			mix = Synthesizer.ApplyADSR( mix, ADSR );
+			cache[tag] = new Float32Array( mix.GetLength() );
+			mix.Render( cache[tag], 0, mix.GetLength() );
 		}
 		
-		Mixer.Queue_Audio( Synthesizer.ApplyADSR( mix, ADSR ), note.start );
+		var handle = new AS_PCM( cache[tag] );
+		handle.SetVolume( volume );
+		
+		Mixer.Queue_Audio( handle, note.start );
 	}
 };
 })();
