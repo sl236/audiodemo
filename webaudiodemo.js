@@ -1,4 +1,35 @@
-function boot()
+var boot = null;
+(function(){
+// -----------------
+
+function gotModule( data )
+{
+	var mod = new TrackerModule(data);
+	console.log(mod.title + ': ' + mod.footer.magic);
+	for( var i = 1; i < mod.samples.length; i++ )
+	{
+		console.log( i + ': ' + mod.samples[i].title + ' / ' + mod.samples[i].len );
+	}
+}
+
+function readText( _file, _cb )
+{
+        $.ajax({
+            url: _file,
+            dataType: 'text',
+            success: _cb,
+            error: (function(_f)
+                    { 
+                        return function(_xhr, _status, _thrown ) 
+                        { 
+                            console.Log("Failed to read '" + _f + "': " + _status.toString() + "; " + _thrown.toString());
+                        }
+                    }
+                )(_file)
+        });
+}
+
+boot = function()
 {
 	if( !Mixer.Init() )
 	{
@@ -6,45 +37,7 @@ function boot()
 		return;
 	}
 
-	// ----	
-	var scale = [ "D.d.E.F.f.G.g.A.a.B.C c D d E F f G g A a B C'c'D'd'E'F'f'G'g'A'a'B'" ];
-		
-	var refrain = 
-	[
-		"G---A---B---B---A---G---",
-		"  G   A   B             ",
-	];
-
-	var middle = 
-	[
-		"G-----A-----B-----B-----",
-		"B A G B A G B A G B A G ",
-	];
-		
-	Synthesizer.SetBaseDuration( 1/2 );
-	Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Glock );
-	Synthesizer.SetTrackVolume( 0, 1.0 );
-	Synthesizer.SetTrackInstrument( 1, Synthesizer.Instruments.Glock );
-	Synthesizer.SetTrackVolume( 1, 1.0 );
-	
-	Mixer.SetVolume( 0.5 );
-	
-	var afidintro = 
-	[
-		"A'",
-		"E ",
-		
-		"C ",
-		"A.",
-	];
-	
-	var afid =
-	[//  |       |       |       |       |
-		"A'--A'A'B'--    C'B'C'D'C'--B'A'",
-		"E --E C E --E --E E E F E --E C ",
-		"C --A A G.--B --  B   A A --G.A ",
-		"A.--C.A.E.--G.--  G.  D.E.--E.F.",
-	];
-	
-	Synthesizer.QueueTracks( afidintro, afid, afid );
+	readText('elysium.mod.b64', gotModule);
 }
+// -------------------
+})();
