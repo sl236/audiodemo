@@ -142,5 +142,16 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 
 
 // -----------------------------------------------------------------------------------------------
+function PlaybackCursor(_module)								{ if (arguments.length) { this.__init__.apply(this, arguments); } };
+
+PlaybackCursor.prototype.__init__ = function( _module )
+{
+	this.m_mod = _module;
+	this.m_channels = [ ];
+	this.m_pos = 0;	
+}
+
+
+// -----------------------------------------------------------------------------------------------
 })();
 // -----------------------------------------------------------------------------------------------
