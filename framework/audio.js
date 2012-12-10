@@ -287,7 +287,13 @@ Filter_Mix.prototype.Render = function( dest, _start, _len )
 	
 	var pending = this.m_pending;
 	var active = this.m_active;
-			
+
+	var dend = dpos + _len;
+	for( var i = dpos; i < dend; i++ )
+	{
+		dest[i] = 0;
+	}
+	
 	while( pos < end )
 	{
 		if( pending.length && (pending[0][0] <= pos ) )
@@ -308,12 +314,7 @@ Filter_Mix.prototype.Render = function( dest, _start, _len )
 		runlength = (lenToPending < runlength) ? lenToPending : runlength;
 		runlength = (lenToEndOfActive < runlength) ? lenToEndOfActive : runlength;
 		destrunend = dpos + runlength;
-		
-		for( var i = dpos; i < destrunend; i++ )
-		{
-			dest[i] = 0;
-		}
-		
+				
 		pos += runlength;
 		this.m_pos = pos;
 		
@@ -395,7 +396,7 @@ Mixer.Init = function()
 
 	if(!ok)
 	{
-		Mixer.SampleRate = 44100;
+		Mixer.SampleRate = 22050;
 		try
 		{
 			mozAudioBuffer = new Float32Array(Mixer.BufferLength);

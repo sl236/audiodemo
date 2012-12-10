@@ -5,13 +5,14 @@ var boot = null;
 function gotModule( data )
 {
 	var mod = new TrackerModule(data);
-	/*
-	console.log(mod.title + ': ' + mod.footer.magic);
+	var text = '<pre>';
+	text += mod.title + ': ' + mod.footer.magic + "\n";
 	for( var i = 1; i < mod.samples.length; i++ )
 	{
-		console.log( i + ': ' + mod.samples[i].title + ' / ' + mod.samples[i].len );
+		text += i + ': ' + mod.samples[i].title + ' / ' + mod.samples[i].len + "\n";
 	}
-	*/
+	text += '</pre>';
+	$('body').html(text);
 	mod.Play();
 }
 
@@ -40,7 +41,8 @@ boot = function()
 		return;
 	}
 
-	readText('elysium.mod.b64', gotModule);
+	//readText('elysium.mod.b64', gotModule);
+	readText('klisje.mod.b64', gotModule);
 }
 // -------------------
 })();
