@@ -50,6 +50,15 @@ var mozAS_PCMOffset = 0;
 
 var master_mixer = null;
 
+// AS interface
+// onStart( _mixer )
+// onFinish( _mixer )
+// GetLength()
+// GetPos()
+// GetLeft()
+// Render( _dest, _start, _len )
+// SetVolume( _volume )
+
 // ----
 AS_PCM.prototype.__init__ = function( data )
 {
@@ -58,7 +67,7 @@ AS_PCM.prototype.__init__ = function( data )
 	this.m_volume = 1;
 }
 
-AS_PCM.prototype.onStart = function()
+AS_PCM.prototype.onStart = function( _mixer )
 {
 }
 
@@ -107,7 +116,7 @@ AS_PCM.prototype.SetVolume = function(_volume)
 	this.m_volume = _volume;
 }
 
-AS_PCM.prototype.onFinish = function()
+AS_PCM.prototype.onFinish = function( _mixer )
 {
 
 }
