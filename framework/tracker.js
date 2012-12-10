@@ -47,7 +47,9 @@ var trackerMagics =
 	"M.K.": { samples: 31, channels: 4 },
 	"M!K!": { samples: 31, channels: 4 },
 	"FLT4": { samples: 31, channels: 4 },
-	"FLT8": { samples: 31, channels: 8 }
+	"4CHN": { samples: 31, channels: 4 },
+	"FLT8": { samples: 31, channels: 8 },
+	"8CHN": { samples: 31, channels: 8 },
 };
 
 function parseSample( _index, data )
@@ -165,11 +167,12 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 		this.samples[i].pcm = pcm;
 		pos += len;
 	}
+
+	this.channelCount = trackerMagics[this.footer.magic] ? trackerMagics[this.footer.magic].channels : 4;
 }
 
 // -----------------------------------------------------------------------------------------------
-
-function PlaybackCursor(_module)								{ if (arguments.length) { this.__init__.apply(this, arguments); } };
+function TrackerPlaybackCursor(_module)													{if(arguments.length){this.__init__.apply(this, arguments);}};
 
 (function(){
 var ClockRate = 7093789.2;
@@ -182,12 +185,18 @@ function Channel()
 	this.m_loopEnd = 0;
 	this.m_repeated = 0;
 	this.m_period = 0;
-	this.m_volume = 0;
+	this.m_channelVolume = 1;
+	this.m_sampleVolume = 0;
 	this.m_pos = 0;
 	this.m_clocks = 0;
 }
 
-Channel.prototype.Play = function( _sampleData, _volume, _period )
+Channel.prototype.SetVolume = function( _volume )
+{
+	this.m_channelVolume = _volume;
+}
+
+Channel.prototype.Play = function( _sampleData, _period )
 {
 	if( !_sampleData )
 	{
@@ -201,7 +210,7 @@ Channel.prototype.Play = function( _sampleData, _volume, _period )
 	this.m_loopEnd = _sampleData.repeat_length ? (_sampleData.repeat_start + _sampleData.repeat_length) : 0;
 	this.m_repeated = 0;
 	this.m_period = _period * _sampleData.finetune;
-	this.m_volume = _sampleData.volume * _volume;
+	this.m_sampleVolume = _sampleData.volume;
 	this.m_pos = 0;
 	this.m_clocks = 0;	
 }
@@ -219,6 +228,7 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 	var period = this.m_period;
 	var destPeriod = _destPeriod;
 	var loopData = this.m_loopEnd ? data[this.m_loopStart] : 0;
+	var volume = this.m_sampleVolume * this.m_channelVolume;
 
 	while( dpos < dend )
 	{
@@ -228,7 +238,7 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 		while( ( sclocks < period ) && ( dpos < dend ) )
 		{
 			var prop = (sclocks/period);
-			_dest[dpos++] = prop * nsample + (1-prop) * csample;
+			_dest[dpos++] = (prop * nsample + (1-prop) * csample) * volume;
 			sclocks += destPeriod;
 		}
 
@@ -254,11 +264,11 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 
 // -- 
 
-PlaybackCursor.prototype.__init__ = function( _module )
+TrackerPlaybackCursor.prototype.__init__ = function( _module )
 {
 	this.m_mod = _module;
 	this.m_channels = [ ];
-	this.m_playing = 0;
+	this.m_playing = 1;
 	this.m_volume = 1;
 
 	this.m_ticksPerDivision = 6;
@@ -266,7 +276,13 @@ PlaybackCursor.prototype.__init__ = function( _module )
 	
 	this.m_pos = 0;
 	this.m_div = 0;
+	this.m_tick = 0;
 	this.m_samples = 0;
+
+	for( var i = 0; i < this.m_mod.channelCount; i++ )
+	{
+		this.m_channels.push( new Channel() );
+	}
 }
 
 // AS interface
@@ -277,13 +293,13 @@ PlaybackCursor.prototype.__init__ = function( _module )
 // GetLeft()
 // Render( _dest, _start, _len )
 // SetVolume( _volume )
-PlaybackCursor.prototype.onStart = function( _mixer )	{ }
-PlaybackCursor.prototype.onFinish = function( _mixer )	{ }
-PlaybackCursor.prototype.GetLength = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
-PlaybackCursor.prototype.GetPos = function()			{ return 0; }
-PlaybackCursor.prototype.GetLeft = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
-PlaybackCursor.prototype.SetVolume = function( _volume ){ this.m_volume = _volume; }
-PlaybackCursor.prototype.Render = function( _dest, _start, _len )
+TrackerPlaybackCursor.prototype.onStart = function( _mixer )	{ }
+TrackerPlaybackCursor.prototype.onFinish = function( _mixer )	{ }
+TrackerPlaybackCursor.prototype.GetLength = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
+TrackerPlaybackCursor.prototype.GetPos = function()			{ return 0; }
+TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
+TrackerPlaybackCursor.prototype.SetVolume = function( _volume ){ this.m_volume = _volume; }
+TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 {
 	var destPeriod = ClockRate / Mixer.SampleRate;
 
@@ -293,25 +309,89 @@ PlaybackCursor.prototype.Render = function( _dest, _start, _len )
 		_dest[i] = 0;
 	}
 
+	if( !this.m_playing )
+	{
+		return;
+	}
+
 	var pos = this.m_pos;
 	var div = this.m_div;
+	var tick = this.m_tick;
 	var samples = this.m_samples;
 
 	var dpos = _start;
+	var dsamplesPerTick = (Mixer.SampleRate / (this.m_ticksPerDivision * this.m_divisionsPerSecond));
+	var channels = this.m_channels;
+	var channelCount = channels.length;
+
+	var patternIndex = this.m_mod.footer.patterns[pos];
+	var divisionData = this.m_mod.patternData[patternIndex];
+
 	while( dpos < end )
 	{
-		// calculate length of current division
-		// calculate length of render run
-		// mix division channels into _dest
-		// advance pos/div/samples/dpos
+		var samplesleft = dsamplesPerTick - samples;
+		var runlength = end-dpos;
+		runlength = (samplesleft < runlength) ? samplesleft : runlength;
+
+		for( var channel = 0; channel < channelCount; channel++ )
+		{
+			//var panRight = (channel+1)&2;
+			channels[channel].Mix( _dest, dpos, runlength, destPeriod );
+		}
+
+		dpos += runlength;
+		samples += runlength;
+		
+		if( runlength >= samplesleft )
+		{
+			++tick;
+			samples -= dsamplesPerTick;
+			if( tick == 4 )
+			{
+				tick = 0;
+				div += channelCount;
+				if( div >= 64 )
+				{
+					++pos;
+					div = 0;
+					patternIndex = this.m_mod.footer.patterns[pos];
+					if( ( pos >= this.m_mod.footer.patterns.length ) || !patternIndex )
+					{
+						this.m_pos = 0;
+						this.m_div = 0;
+						this.m_tick = 0;
+						this.m_samples = 0;
+						this.m_playing = 0;
+						return;
+					}
+					divisionData = this.m_mod.patternData[patternIndex];
+				}
+				
+				for( var i = 0; i < channelCount; i++ )
+				{
+					var sampleIdx = divisionData[div+i].sample;
+					if( sampleIdx )
+					{
+						channels[i].Play( this.m_mod.samples[sampleIdx], divisionData[div+i].param*2 );
+					}
+				}
+			}
+		}
 	}
 
 	this.m_pos = pos;
 	this.m_div = div;
+	this.m_tick = tick;
 	this.m_samples = samples;
 }
 
 })();
+// -----------------------------------------------------------------------------------------------
+
+TrackerModule.prototype.Play = function()
+{
+	Mixer.Queue_Audio( new TrackerPlaybackCursor(this) );
+}
 
 // -----------------------------------------------------------------------------------------------
 })();
