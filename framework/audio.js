@@ -266,7 +266,7 @@ Filter_Mix.prototype.Queue_Audio = function(handle, delay)
 	this.m_pending.push([ this.m_pos + (delay||0), handle ]);
 	this.m_pending.sort(function(a, b) { return a[0] - b[0]; });
 
-	var len = delay + handle.GetLength();
+	var len = (delay||0) + handle.GetLength();
 	this.m_length = ( len > this.m_length ) ? len : this.m_length;
 	
 	return handle;
