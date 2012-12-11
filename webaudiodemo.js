@@ -1,3 +1,9 @@
+// js.audiodemo - Sergei Lewis 2012
+// Distributed under the Do Whatever You Want license:
+// 1. You just do whatever you want.
+//
+// https://github.com/sl236/audiodemo/
+
 var boot = null;
 (function(){
 // -----------------
@@ -8,8 +14,9 @@ function gotModule( data )
 
 	// display some info
 	var channelCount = mod.GetChannelCount();
-	var text = '';
-		
+	var text = '<b>js.audiodemo</b>';
+	
+	text += '<hr />';		
 	text += '<div>';
 		for( var i = 0; i < channelCount; i++ )
 		{
@@ -18,7 +25,7 @@ function gotModule( data )
 		text += '<span id="pause" style="border: 1px solid black;" onclick="boot.pause()">pause</span>';
 	text += '</div>';
 	text += '<br />';
-	text += '<div style="display: block; width: 100px; height: 10px; border: 1px solid black;"><div id="propthrough" style="width: 0px; height: 10px; background: black;"></div></div>';
+	text += '<div class="progress"><div id="propthrough" style="width: 0px; height: 10px; background: black;"></div></div>';
 	
     text += '<hr>';
 	var playtime = Math.ceil( mod.GetPlayTime() );
@@ -39,7 +46,7 @@ function gotModule( data )
 		text += '<pre id="smpl' + i + '">' + i + ' : ' + samples[i].title + ' / ' + samples[i].len + "</pre>";
 	}
 	text += '</div>';
-    text += '<hr>';
+    text += '<hr />';
     text += '<a href="https://github.com/sl236/audiodemo">GitHub repository</a>';
 	$('body').html(text);
 	var pauseElt = $('#pause');
@@ -124,7 +131,7 @@ boot = function()
 		if( file.search(/[^a-zA-Z0-9.]/) == -1 )
 		{		
 	        $.ajax({
-	            url: file,
+	            url: 'music/' + file,
 	            dataType: 'text',
 	            success: gotModule
 	        });

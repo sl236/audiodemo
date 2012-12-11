@@ -1,3 +1,9 @@
+// js.audiodemo - Sergei Lewis 2012
+// Distributed under the Do Whatever You Want license:
+// 1. You just do whatever you want.
+//
+// https://github.com/sl236/audiodemo/
+
 var Mixer = 
 {
 	Init: function()													{},

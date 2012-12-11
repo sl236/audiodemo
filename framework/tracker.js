@@ -1,3 +1,9 @@
+// js.audiodemo - Sergei Lewis 2012
+// Distributed under the Do Whatever You Want license:
+// 1. You just do whatever you want.
+//
+// https://github.com/sl236/audiodemo/
+
 function TrackerModule(_base64data)														{if(arguments.length){this.__init__.apply(this,arguments);}};
 
 

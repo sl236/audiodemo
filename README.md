@@ -175,3 +175,10 @@ Using the mod player:
  // channels[i].GetCurrentSampleIndex() 
  // channels[i].GetPos() / channels[i].GetLength()
 ```
+
+***
+
+Distributed under the Do Whatever You Want license:  
+1. You just do whatever you want.
+
+(Though linking back is only polite, natch)
