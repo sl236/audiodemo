@@ -40,20 +40,32 @@ Playing one-shot fire-and-forget sound effects:
 ```javascript
 // given a var pcm which is a Float32Array of PCM samples 
 // representing audio sampled at Mixer.SampleRate
-Mixer.Queue_Audio( new AS_PCM( pcm ) ); // plays the sound immediately
 
-Mixer.Queue_Audio( new AS_PCM( pcm ), 20*Mixer.SampleRate ); // plays the sound after a delay of 20 seconds
+// play the sound immediately
+Mixer.Queue_Audio( new AS_PCM( pcm ) ); 
+
+// play the sound after a delay of 20 seconds
+Mixer.Queue_Audio( new AS_PCM( pcm ), 20*Mixer.SampleRate ); 
 
 var control = new AS_PCM( pcm );
 Mixer.Queue_Audio( control );
-control.SetVolume( 0.2 ); // allows you to control parameters of this sound effect instance before/after queuing
 
-Mixer.Queue_Audio( new AS_SineWave( 1024, 2*Mixer.SampleRate ) ); // plays a 1024Hz sine wave lasting 2 seconds
+// you can control parameters of each sound effect instance 
+// before/after queuing
+control.SetVolume( 0.2 ); 
+
+// play a 1024Hz sine wave lasting 2 seconds
+Mixer.Queue_Audio( new AS_SineWave( 1024, 2*Mixer.SampleRate ) );
 
 // given a, d, r which are proportions of the length of the audio being filtered
 // representing attack, decay, release times, 
 // and an s which is the desired sustain volume:
-Mixer.Queue_Audio( new Filter_ADSR( new AS_SineWave( 1024, 2*Mixer.SampleRate ), a, d, s, r ) );
+Mixer.Queue_Audio( 
+    new Filter_ADSR( 
+        new AS_SineWave( 1024, 2*Mixer.SampleRate ), 
+        a, d, s, r 
+    ) 
+);
 
 // forming audio graphs
 var mix = new Filter_Mix(); 
