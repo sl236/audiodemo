@@ -6,7 +6,7 @@ var Mixer =
 
 	SampleRate: 0,
 	Channels: 1,
-	BufferLength: 1024
+	BufferLength: 4096
 };
 
 var Synthesizer = 
