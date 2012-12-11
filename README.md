@@ -23,8 +23,10 @@ Documentation
 Configuring the mixer:
 ```javascript
 Mixer.Channels = 1; // default is 1. Stereo is TODO
-Mixer.BufferLength = 4096; // in samples; must be a power of 2; default is 4096. A shorter buffer length means less latency but the audio will be choppy if the buffer is too small.
-// the above values cannot be changed after Mixer.Init() is called.
+Mixer.BufferLength = 4096; // in samples; must be a power of 2; default is 4096.
+// A shorter buffer length means less latency 
+// but the audio will be choppy if the buffer is too small.
+// The above values cannot be changed after Mixer.Init() is called.
 
 // call Mixer.Init once before interacting with audio in any other way.
 if( !Mixer.Init() )
