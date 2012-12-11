@@ -699,7 +699,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 					{
 						case 0xF:	// set speed
 								var z = ddat.X * 16 + ddat.Y;
-								if( z<32 )
+								if( z<=32 )
 								{
 									this.m_ticksPerDivision = z;
 								}
