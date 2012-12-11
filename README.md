@@ -2,7 +2,7 @@ js.audiodemo
 ============
 
 Javascript audio mixer and modplayer.  
-Works both in Firefox and Chrome.
+Works the same way in Firefox and Chrome - i.e. both the competing APIs
 
 ***
 
@@ -22,13 +22,16 @@ Documentation
 
 Configuring the mixer:
 ```javascript
-Mixer.Channels = 1; // default is 1. Stereo not yet supported, but will be in the future.
+Mixer.Channels = 1; // default is 1. Stereo is TODO
 Mixer.BufferLength = 4096; // in samples; must be a power of 2; default is 4096. A shorter buffer length means less latency but the audio will be choppy if the buffer is too small.
 // the above values cannot be changed after Mixer.Init() is called.
 
-if( !Mixer.Init() ) // call this once before interacting with audio in any other way.
+// call Mixer.Init once before interacting with audio in any other way.
+if( !Mixer.Init() )
 {
-    // audio initialisation failed. Functions will silently do nothing. You might want to let the user know.
+    // Audio initialisation failed. 
+    // Functions will silently do nothing. 
+    // You might want to let the user know.
 }
 
 // Mixer.SampleRate now holds a valid value
