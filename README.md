@@ -147,6 +147,7 @@ Declares:
 TrackerModule
 ```
 
+Depends on audio.js.  
 Using the mod player:
 
 ```javascript
