@@ -1,4 +1,7 @@
 Javascript audio mixer and modplayer.
 
-[klisje.mod](http://www.toothycat.net/~sham/dev/webaudiodemo/?klisje.mod.b64)
-[elysium.mod](http://www.toothycat.net/~sham/dev/webaudiodemo/?elysium.mod.b64)
+Works both in Firefox and Chrome.
+
+Play [klisje.mod](http://www.toothycat.net/~sham/dev/webaudiodemo/?klisje.mod.b64)
+
+Play [elysium.mod](http://www.toothycat.net/~sham/dev/webaudiodemo/?elysium.mod.b64)
