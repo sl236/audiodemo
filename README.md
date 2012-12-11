@@ -97,8 +97,10 @@ Using the simple synthesizer:
  // As a shorthand, . is 3, - and space are 4, and ' is 5. 
  
  Synthesizer.SetBaseDuration( 1/2 ); // one note plays for this long. 
- // Set this to the shortest length required, then use -- to create longer notes. 
- Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Glock ); // some toy instruments are provided
+ // Set this to the shortest length required, 
+ // then use -- to create longer notes. 
+ // Some toy instruments are provided.
+ Synthesizer.SetTrackInstrument( 0, Synthesizer.Instruments.Glock ); 
  Synthesizer.SetTrackVolume( 0, 1.0 );
  Synthesizer.SetTrackInstrument( 1, Synthesizer.Instruments.Sine );
  Synthesizer.SetTrackVolume( 1, 0.4 );
@@ -110,7 +112,8 @@ Using the mod tracker:
 
 ```javascript
  // obtaining base64 encoded .mod file is left as an exercise
- // must actually be a mod - formats other than the protracker family are not supported
+ // must actually be a mod
+ // formats other than the protracker family are not supported
  var mod = new TrackerModule( base64_encoded_mod );
  // mod.GetChannelCount() will give you the channel count
  // mod.GetPlayTime() gives song duration in seconds
@@ -118,7 +121,10 @@ Using the mod tracker:
  var samples = mod.GetSamples(); // gives an array of samples
  // now samples[i].title is also there if your visualisation wants that
  
- var handle = mod.Play(); // handle can be used for remote control while the mod is playing
+ var handle = mod.Play(); 
+ 
+ // handle can be used for remote control 
+ // while the mod is playing
  handle.SetVolume( 0.8 ); // 0.0 - 1.0; default 1.0
  // handle.Pause() toggles paused/playing; handle.IsPaused() to check
  
