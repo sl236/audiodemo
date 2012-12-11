@@ -17,6 +17,7 @@ function gotModule( data )
 		}
 	text += '</div>';
 	
+    text += '<hr>';
 	text += '<pre>';
 		text += mod.GetTitle() + ': ' + mod.GetMagic() + "\n";	
 		var samples = mod.GetSamples();
@@ -26,6 +27,8 @@ function gotModule( data )
 			text += i + ': ' + samples[i].title + ' / ' + samples[i].len + "\n";
 		}
 	text += '</pre>';
+    text += '<hr>';
+    text += '<a href="https://github.com/sl236/audiodemo">GitHub repository</a>';
 	$('body').html(text);
 	
 	var channelElts = [ ];
