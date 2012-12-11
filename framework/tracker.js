@@ -174,6 +174,26 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 	this.channelCount = trackerMagics[this.footer.magic] ? trackerMagics[this.footer.magic].channels : 4;
 }
 
+TrackerModule.prototype.GetChannelCount = function()
+{
+	return this.channelCount;
+}
+
+TrackerModule.prototype.GetTitle = function()
+{
+	return this.title;
+}
+
+TrackerModule.prototype.GetMagic = function()
+{
+	return this.footer.magic;
+}
+
+TrackerModule.prototype.GetSamples = function()
+{
+	return this.samples;
+}
+
 // -----------------------------------------------------------------------------------------------
 function TrackerPlaybackCursor(_module)													{if(arguments.length){this.__init__.apply(this, arguments);}};
 
@@ -189,11 +209,20 @@ function Channel()
 	this.m_repeated = 0;
 	this.m_period = 0;
 	this.m_arpeggio = 0;
-	this.m_channelVolume = 1;
+	this.m_channelVolume = 0.5;
 	this.m_sampleVolume = 0;
 	this.m_pos = 0;
 	this.m_clocks = 0;
-	this.m_sampleIdx = 0;
+}
+
+Channel.prototype.GetCurrentPitch = function()
+{
+	return this.m_data ? this.m_period : 0;
+}
+
+Channel.prototype.GetCurrentVolume = function()
+{
+	return this.m_data ? this.m_sampleVolume * this.m_channelVolume : 0;
 }
 
 Channel.prototype.SetVolume = function( _volume )
@@ -209,7 +238,7 @@ Channel.prototype.Play = function( _data, _bank )
 	this.m_effectX = _data.X;
 	this.m_effectY = _data.Y;
 	
-	if( sampleIdx )
+	if( _data.param )
 	{
 		switch( this.m_effect )
 		{
@@ -224,27 +253,27 @@ Channel.prototype.Play = function( _data, _bank )
 	
 			default:
 				{
-					this.m_data = null;
-					var sampleData = _bank[sampleIdx]; //{ title: '', len: 0, finetune: 0, volume: 0, repeat_start: 0, repeat_length: 0, pcm: null };
+					this.m_repeated = 0;
+					this.m_arpeggioAdjust = 0;
+					this.m_basePeriod = _data.param * 2;
+					this.m_pos = 0;
+					this.m_clocks = 0;
+					
+					var sampleData = sampleIdx ? _bank[sampleIdx] : null;
 					if( sampleData )
 					{
 						this.m_data = sampleData.pcm;
-						this.m_sampleIdx = sampleIdx;
 						this.m_loopStart = sampleData.repeat_start;
 						this.m_loopEnd = sampleData.repeat_length ? (sampleData.repeat_start + sampleData.repeat_length) : 0;
-						this.m_repeated = 0;
-						this.m_arpeggioAdjust = 0;
-						this.m_basePeriod = _data.param * 2 * sampleData.finetune;
-						this.m_period = this.m_basePeriod;
+						this.m_finetune = sampleData.finetune;
 						this.m_sampleVolume = sampleData.volume;
-						this.m_pos = 0;
-						this.m_clocks = 0;
-						this.m_slideToNote = 0;
-					}		
+					}
+						
+					this.m_period = this.m_basePeriod * this.m_finetune;
 				}
 			break;
 		}
-	}
+	}	
 	
 	this.Tick(0);
 }
@@ -259,11 +288,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				switch( _tick % 3 )
 				{
 					case 1:
-							this.m_arpeggio = this.m_basePeriod * (Math.pow( c12throot2, this.m_effectX ) - 1);
+							this.m_arpeggio = this.m_basePeriod * this.m_finetune * (Math.pow( c12throot2, this.m_effectX ) - 1);
 						break;
 						
 					case 2:
-							this.m_arpeggio = this.m_basePeriod * (Math.pow( c12throot2, this.m_effectY ) - 1);
+							this.m_arpeggio = this.m_basePeriod * this.m_finetune * (Math.pow( c12throot2, this.m_effectY ) - 1);
 						break;
 				}			
 			break;
@@ -357,7 +386,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				this.m_effectX = 0;
 				this.m_effectY = 0;
 			break;
-		case 10:	// Volume slide
+		case 0xA:	// Volume slide
 				if( _tick )
 				{
 					if( this.m_effectX )
@@ -372,10 +401,10 @@ Channel.prototype.Tick = function( _tick, pos, div )
 					}
 				}
 			break;
-		case 12:	// set volume
+		case 0xC:	// set volume
 				this.m_sampleVolume = (this.m_effectX * 16 + this.m_effectY) / 64;
 			break;
-		case 14:	// extended
+		case 0xE:	// extended
 				switch( this.m_effectX )
 				{
 					case 1:	// fineslide up
@@ -400,7 +429,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							}
 						break;
 						
-					case 10: // volume up
+					case 0xA: // volume up
 							if( !_tick )
 							{
 								this.m_sampleVolume += (this.m_effectY)/64;
@@ -408,7 +437,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							}
 						break;
 						
-					case 11: // volume down
+					case 0xB: // volume down
 							if( !_tick )
 							{
 								this.m_sampleVolume -= (this.m_effectY)/64;
@@ -416,14 +445,14 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							}
 						break;
 						
-					case 12: // cut sample
+					case 0xC: // cut sample
 							if( _tick >= this.m_effectY )
 							{
 								this.m_sampleVolume = 0;
 							}
 						break;
 						
-					case 13: // delay sample
+					case 0xD: // delay sample
 							if( _tick < this.m_effectY )
 							{
 								this.m_sampleVolume = 0;
@@ -466,7 +495,9 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 		var propinc = (destPeriod/period);
 		while( dpos < runend )
 		{
-			_dest[dpos++] += (prop * nsample + (1-prop) * csample) * volume;
+			var t = prop; // lerp			
+			//var t = prop*prop*prop*(prop*(prop*6 - 15) + 10); // Perlin's smootherstep
+			_dest[dpos++] += (t * nsample + (1-t) * csample) * volume;
 			prop += propinc;
 		}
 		
@@ -481,7 +512,6 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 				if (!this.m_loopEnd)
 				{
 					this.m_data = null;
-					this.m_sampleIdx = 0;
 					return;
 				}
 				spos = this.m_loopStart;
@@ -513,6 +543,8 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 	this.m_div = 0;
 	this.m_tick = 0;
 	this.m_samples = 0;
+	
+	this.m_fir = [ 0, 0, 0, 0 ];
 
 	var patternIndex = this.m_mod.footer.patterns[0];
 	var divisionData = this.m_mod.patternData[patternIndex];
@@ -555,6 +587,18 @@ TrackerPlaybackCursor.prototype.GetLength = function()			{ return this.m_playing
 TrackerPlaybackCursor.prototype.GetPos = function()			{ return 0; }
 TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
 TrackerPlaybackCursor.prototype.SetVolume = function( _volume ){ this.m_volume = _volume; }
+TrackerPlaybackCursor.prototype.GetSamplesPerTick = function()
+{
+	var samplesPerDivision = (Mixer.SampleRate * this.m_ticksPerDivision) / ( 6 * this.m_divisionsPerSecond );
+	
+	return samplesPerDivision / this.m_ticksPerDivision;
+}
+
+TrackerPlaybackCursor.prototype.GetChannels = function()
+{
+	return this.m_channels;
+}
+
 TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 {
 	var destPeriod = ClockRate / Mixer.SampleRate;
@@ -576,7 +620,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 	var samples = this.m_samples;
 
 	var dpos = _start;
-	var dsamplesPerTick = (Mixer.SampleRate / (this.m_ticksPerDivision * this.m_divisionsPerSecond));
+	var dsamplesPerTick = this.GetSamplesPerTick();
 	var channels = this.m_channels;
 	var channelCount = channels.length;
 
@@ -663,7 +707,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 								{
 									this.m_divisionsPerSecond = z*4/60;
 								}
-								dsamplesPerTick = (Mixer.SampleRate / (this.m_ticksPerDivision * this.m_divisionsPerSecond));
+								dsamplesPerTick = this.GetSamplesPerTick();
 							break;
 					}
 				}
@@ -675,6 +719,30 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 	this.m_div = div;
 	this.m_tick = tick;
 	this.m_samples = samples;
+	
+	for( var i = _start; i < end; ++i )
+	{
+		_dest[i] *= this.m_volume;
+	}
+	
+	/*
+	var fir = this.m_fir;
+	for( var i = _start; i < end; ++i )
+	{
+		var level = _dest[i];
+		var sample = 
+			level * 0.125 + 
+			fir[0] * 0.2 + 
+			fir[1] * 0.35 + 
+			fir[2] * 0.2 + 
+			fir[3] * 0.125;
+		fir[3] = fir[2];
+		fir[2] = fir[1];
+		fir[1] = fir[0];
+		fir[0] = level;
+		_dest[i] = sample * this.m_volume;
+	}
+	*/
 }
 
 })();
@@ -682,7 +750,9 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 
 TrackerModule.prototype.Play = function()
 {
-	Mixer.Queue_Audio( new TrackerPlaybackCursor(this) );	
+	var handle = new TrackerPlaybackCursor(this);
+	Mixer.Queue_Audio( handle );
+	return handle;
 }
 
 // -----------------------------------------------------------------------------------------------

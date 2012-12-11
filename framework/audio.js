@@ -396,7 +396,7 @@ Mixer.Init = function()
 
 	if(!ok)
 	{
-		Mixer.SampleRate = 22050;
+		Mixer.SampleRate = 44100;
 		try
 		{
 			mozAudioBuffer = new Float32Array(Mixer.BufferLength);
