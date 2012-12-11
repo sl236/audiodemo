@@ -172,6 +172,86 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 	}
 
 	this.channelCount = trackerMagics[this.footer.magic] ? trackerMagics[this.footer.magic].channels : 4;
+	this.m_infinite = 0;
+	this.m_playTime = 0;
+	this.m_keys = [ ];
+
+	// calculate piece length and key list
+	(function(){
+		var time = 0;
+		
+		var pos = 0;
+		var div = 0;
+		var bpm = 125;
+		var tickRate = 6;
+		var channelCount = this.channelCount;
+		var loopmap = [];
+		var keys = this.m_keys;
+
+		while( pos < this.footer.songPositions )
+		{
+			var patternIndex = this.footer.patterns[pos];
+			var divisionData = this.patternData[patternIndex];
+			var nextdiv = div + channelCount;
+			var nextpos = pos;
+				
+			for( var i = 0; i < channelCount; i++ )
+			{
+				var ddat = divisionData[div+i];
+				switch( ddat.effect )
+				{
+					case 0xB:	// jump to order
+							nextpos = ddat.X * 16 + ddat.Y;
+							nextdiv = 0;
+						break;
+						
+					case 0xD:	// pattern break
+							nextpos = pos + 1;
+							nextdiv = ddat.X * 10 + ddat.Y;
+						break;
+
+					case 0xF:	// set speed
+							var z = ddat.X * 16 + ddat.Y;
+							if( z<=32 )
+							{
+								tickRate = z;
+							}
+							else
+							{
+								bpm = z;
+							}							
+						break;
+
+				}
+			}
+
+			var key = (pos*1024)+div;
+			if( loopmap[key] ) // detect infinite loops
+			{
+				this.m_infinite = true;
+				this.m_playTime = time;
+				return;
+			}
+
+			keys.push( {'time': time, 'pos': pos, 'div': div, 'bpm': bpm, 'tickRate': tickRate } );
+			loopmap[key] = 1;
+			time += 1 / ( (6/tickRate) * (bpm*4/60) );
+
+			div = nextdiv;
+			if( div >= 64*4 )
+			{
+				nextpos = pos + 1;
+				div = 0;
+			}
+			pos = nextpos;
+		};
+		this.m_playTime = time;
+	}).apply(this);	
+}
+
+TrackerModule.prototype.GetPlayTime = function()
+{
+	return this.m_playTime;
 }
 
 TrackerModule.prototype.GetChannelCount = function()
@@ -538,6 +618,7 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 
 	this.m_ticksPerDivision = 6;
 	this.m_divisionsPerSecond = 125*4/60;
+	this.m_samplesPlayed = 0;
 	
 	this.m_pos = 0;
 	this.m_div = 0;
@@ -548,6 +629,7 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 
 	var patternIndex = this.m_mod.footer.patterns[0];
 	var divisionData = this.m_mod.patternData[patternIndex];
+	this.m_sampleLength = ((this.m_mod.GetPlayTime()+0.5) * Mixer.SampleRate);
 	
 	for( var i = 0; i < _module.channelCount; i++ )
 	{
@@ -583,9 +665,9 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 // SetVolume( _volume )
 TrackerPlaybackCursor.prototype.onStart = function( _mixer )	{ }
 TrackerPlaybackCursor.prototype.onFinish = function( _mixer )	{ }
-TrackerPlaybackCursor.prototype.GetLength = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
-TrackerPlaybackCursor.prototype.GetPos = function()			{ return 0; }
-TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_playing ? (Mixer.BufferLength * 2) : 0; }
+TrackerPlaybackCursor.prototype.GetLength = function()			{ return this.m_sampleLength; }
+TrackerPlaybackCursor.prototype.GetPos = function()			{ return this.m_samplesPlayed; }
+TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_sampleLength - this.m_samplesPlayed; }
 TrackerPlaybackCursor.prototype.SetVolume = function( _volume ){ this.m_volume = _volume; }
 TrackerPlaybackCursor.prototype.GetSamplesPerTick = function()
 {
@@ -613,6 +695,8 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 	{
 		return;
 	}
+
+	this.m_samplesPlayed += _len;
 
 	var pos = this.m_pos;
 	var div = this.m_div;
@@ -661,7 +745,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 					switch( ddat.effect )
 					{
 						case 0xB:	// jump to order
-								pos = ddat.X * 16 + ddat.Y;
+								pos = ddat.X * 16 + ddat.Y - 1;
 								nextdiv = 64*4; // force division data reload
 							break;
 							

@@ -19,7 +19,16 @@ function gotModule( data )
 	
     text += '<hr>';
 	text += '<pre>';
-		text += mod.GetTitle() + ': ' + mod.GetMagic() + "\n";	
+		var playtime = Math.ceil( mod.GetPlayTime() );
+		var s = playtime % 60;
+		s = (s<10) ? '0' + s : s;
+		playtime = Math.floor( playtime/60 );
+		var m = playtime % 60;
+		m = (m<10) ? '0' + m : m;
+		var h = Math.floor( playtime/60 );
+		playtime = h? h + ':' + m + ':' + s : m + ':' + s;
+		
+		text += mod.GetTitle() + ': ' + mod.GetMagic() + " / " + playtime + "\n";	
 		var samples = mod.GetSamples();
 		
 		for( var i = 1; i < samples.length; i++ )
