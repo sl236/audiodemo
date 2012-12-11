@@ -305,6 +305,11 @@ Channel.prototype.GetCurrentVolume = function()
 	return this.m_data ? this.m_sampleVolume * this.m_channelVolume : 0;
 }
 
+Channel.prototype.GetCurrentSampleIndex = function()
+{
+	return this.m_data ? this.m_lastSampleIdx : 0;
+}
+
 Channel.prototype.SetVolume = function( _volume )
 {
 	this.m_channelVolume = _volume;
@@ -314,6 +319,7 @@ Channel.prototype.Play = function( _data, _bank )
 {
 	// sample param effect X Y
 	var sampleIdx = _data.sample;
+
 	this.m_effect = _data.effect;
 	this.m_effectX = _data.X;
 	this.m_effectY = _data.Y;
@@ -342,6 +348,7 @@ Channel.prototype.Play = function( _data, _bank )
 					var sampleData = sampleIdx ? _bank[sampleIdx] : null;
 					if( sampleData )
 					{
+						this.m_lastSampleIdx = sampleIdx;
 						this.m_data = sampleData.pcm;
 						this.m_loopStart = sampleData.repeat_start;
 						this.m_loopEnd = sampleData.repeat_length ? (sampleData.repeat_start + sampleData.repeat_length) : 0;

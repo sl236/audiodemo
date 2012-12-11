@@ -21,24 +21,24 @@ function gotModule( data )
 	text += '<div style="display: block; width: 100px; height: 10px; border: 1px solid black;"><div id="propthrough" style="width: 0px; height: 10px; background: black;"></div></div>';
 	
     text += '<hr>';
-	text += '<pre>';
-		var playtime = Math.ceil( mod.GetPlayTime() );
-		var s = playtime % 60;
-		s = (s<10) ? '0' + s : s;
-		playtime = Math.floor( playtime/60 );
-		var m = playtime % 60;
-		m = (m<10) ? '0' + m : m;
-		var h = Math.floor( playtime/60 );
-		playtime = h? h + ':' + m + ':' + s : m + ':' + s;
-		
-		text += mod.GetTitle() + ': ' + mod.GetMagic() + " / " + playtime + "\n";	
-		var samples = mod.GetSamples();
-		
-		for( var i = 1; i < samples.length; i++ )
-		{
-			text += i + ': ' + samples[i].title + ' / ' + samples[i].len + "\n";
-		}
-	text += '</pre>';
+	var playtime = Math.ceil( mod.GetPlayTime() );
+	var s = playtime % 60;
+	s = (s<10) ? '0' + s : s;
+	playtime = Math.floor( playtime/60 );
+	var m = playtime % 60;
+	m = (m<10) ? '0' + m : m;
+	var h = Math.floor( playtime/60 );
+	playtime = h? h + ':' + m + ':' + s : m + ':' + s;
+	
+	text += '<div style="width: 20%">';
+	text += '<pre>' + mod.GetTitle() + ': ' + mod.GetMagic() + " / " + playtime + "</pre>";	
+	var samples = mod.GetSamples();
+	
+	for( var i = 1; i < samples.length; i++ )
+	{
+		text += '<pre id="smpl' + i + '">' + i + ' : ' + samples[i].title + ' / ' + samples[i].len + "</pre>";
+	}
+	text += '</div>';
     text += '<hr>';
     text += '<a href="https://github.com/sl236/audiodemo">GitHub repository</a>';
 	$('body').html(text);
@@ -50,6 +50,12 @@ function gotModule( data )
 	for( var i = 0; i < channelCount; i++ )
 	{
 		channelElts[i] = document.getElementById('ch'+i);
+	}
+
+	var sampleElts = [ ];
+	for( var i = 1; i < samples.length; i++ )
+	{
+		sampleElts[i] = document.getElementById('smpl'+i);
 	}
 	
 	// play the module
@@ -64,13 +70,21 @@ function gotModule( data )
 	
 	// arrange for some visualisation
 	var channels = handle.GetChannels();
+	var currSampleElt = [];
 	
 	setInterval( function() {
 		for( var i = 0; i < channelCount; i++ )
 		{
 			var pitch = channels[i].GetCurrentPitch();
 			var vol = channels[i].GetCurrentVolume();
-			var bgcol = 'fff';
+			var sampleIndex = channels[i].GetCurrentSampleIndex();
+			var bgcol = '#fff';
+
+			if (currSampleElt[i])
+			{
+				currSampleElt[i].style.background = '#fff';
+				currSampleElt[i] = null;
+			}
 			
 			if( pitch && vol )
 			{
@@ -82,9 +96,16 @@ function gotModule( data )
 				r = (r<0?0:(r>15?15:r));
 				
 				bgcol = '#' + r.toString(16) + g.toString(16) + b.toString(16);
+				currSampleElt[i]=sampleElts[sampleIndex];
 			}
 			channelElts[i].style.background = bgcol;
-			propThroughElt.width( Math.floor( 100*(handle.GetPos() / handle.GetLength()) ) );
+
+			if (currSampleElt[i])
+			{
+				currSampleElt[i].style.background = bgcol;
+			}
+
+			propThroughElt.width(Math.floor(100 * (handle.GetPos() / handle.GetLength())));
 		}
 	}, 100 );
 }
