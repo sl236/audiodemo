@@ -20,7 +20,21 @@ Documentation
 ## audio.js
 ### mixer, one-shot SFX, simple synthesizer
 
-Configuring the mixer:
+Declares:
+```
+Mixer
+Synthesizer
+
+// audio sources
+AS_PCM
+AS_SineWave
+
+// audio processors
+Filter_ADSR
+Filter_Mix
+```
+
+Configuring audio:
 ```javascript
 Mixer.Channels = 1; // default is 1. Stereo is TODO
 Mixer.BufferLength = 4096; // in samples; must be a power of 2; default is 4096.
@@ -125,7 +139,15 @@ Using the simple synthesizer:
  
 ```
 
-Using the mod tracker:
+## tracker.js
+### mod player
+
+Declares:
+```
+TrackerModule
+```
+
+Using the mod player:
 
 ```javascript
  // obtaining base64 encoded .mod file is left as an exercise
