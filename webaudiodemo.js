@@ -15,7 +15,10 @@ function gotModule( data )
 		{
 			text += '<span id="ch' + i + '">&nbsp;&nbsp;&nbsp;&nbsp;</span> ';
 		}
+		text += '<span id="pause" style="border: 1px solid black;" onclick="boot.pause()">pause</span>';
 	text += '</div>';
+	text += '<br />';
+	text += '<div style="display: block; width: 100px; height: 10px; border: 1px solid black;"><div id="propthrough" style="width: 0px; height: 10px; background: black;"></div></div>';
 	
     text += '<hr>';
 	text += '<pre>';
@@ -39,6 +42,9 @@ function gotModule( data )
     text += '<hr>';
     text += '<a href="https://github.com/sl236/audiodemo">GitHub repository</a>';
 	$('body').html(text);
+	var pauseElt = $('#pause');
+	var propThroughElt = $('#propthrough');
+	pauseElt.hide();
 	
 	var channelElts = [ ];
 	for( var i = 0; i < channelCount; i++ )
@@ -49,6 +55,12 @@ function gotModule( data )
 	// play the module
 	var handle = mod.Play();
 	handle.SetVolume( 0.8 );
+	boot.pause = function()
+	{
+		handle.Pause();
+		pauseElt.html( handle.IsPaused() ? 'play' : 'pause' );
+	}
+	pauseElt.show();
 	
 	// arrange for some visualisation
 	var channels = handle.GetChannels();
@@ -72,6 +84,7 @@ function gotModule( data )
 				bgcol = '#' + r.toString(16) + g.toString(16) + b.toString(16);
 			}
 			channelElts[i].style.background = bgcol;
+			propThroughElt.width( Math.floor( 100*(handle.GetPos() / handle.GetLength()) ) );
 		}
 	}, 100 );
 }

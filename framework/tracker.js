@@ -614,6 +614,7 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 	
 	this.m_channels = [ ];
 	this.m_playing = 1;
+	this.m_paused = 0;
 	this.m_volume = 1;
 
 	this.m_ticksPerDivision = 6;
@@ -681,6 +682,16 @@ TrackerPlaybackCursor.prototype.GetChannels = function()
 	return this.m_channels;
 }
 
+TrackerPlaybackCursor.prototype.Pause = function()
+{
+	this.m_paused = !this.m_paused;
+}
+
+TrackerPlaybackCursor.prototype.IsPaused = function()
+{
+	return this.m_paused;
+}
+
 TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 {
 	var destPeriod = ClockRate / Mixer.SampleRate;
@@ -691,7 +702,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 		_dest[i] = 0;
 	}
 
-	if( !this.m_playing )
+	if( this.m_paused || !this.m_playing )
 	{
 		return;
 	}
