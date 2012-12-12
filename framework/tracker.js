@@ -572,6 +572,7 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 	var destPeriod = _destPeriod;
 	var loopData = this.m_loopEnd ? data[this.m_loopStart] : 0;
 	var volume = this.m_sampleVolume * this.m_channelVolume;
+	if(!period) { return; }
 
 	var csample = data[spos];
 	var nsample = ((spos+1)<send) ? data[spos+1] : loopData;
@@ -769,13 +770,17 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 					switch( ddat.effect )
 					{
 						case 0xB:	// jump to order
-								pos = ddat.X * 16 + ddat.Y - 1;
-								nextdiv = 64*4; // force division data reload
+								pos = ddat.X * 16 + ddat.Y;
+								nextdiv = 0;
+								patternIndex = this.m_mod.footer.patterns[pos];
+								divisionData = this.m_mod.patternData[patternIndex];
 							break;
 							
 						case 0xD:	// pattern break
 								pos++;
 								nextdiv = ddat.X * 10 + ddat.Y;
+								patternIndex = this.m_mod.footer.patterns[pos];
+								divisionData = this.m_mod.patternData[patternIndex];
 							break;
 					}
 				}
@@ -787,18 +792,19 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 					++pos;
 					div = 0;
 					patternIndex = this.m_mod.footer.patterns[pos];
-					if( pos >= this.m_mod.footer.songPositions )
-					{
-						this.m_pos = 0;
-						this.m_div = 0;
-						this.m_tick = 0;
-						this.m_samples = 0;
-						this.m_playing = 0;
-						return;
-					}
 					divisionData = this.m_mod.patternData[patternIndex];
 				}
 				
+				if( pos >= this.m_mod.footer.songPositions )
+				{
+					this.m_pos = 0;
+					this.m_div = 0;
+					this.m_tick = 0;
+					this.m_samples = 0;
+					this.m_playing = 0;
+					return;
+				}
+
 				for( var i = 0; i < channelCount; i++ )
 				{
 					var ddat = divisionData[div+i];
