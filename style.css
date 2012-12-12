@@ -26,7 +26,37 @@ hr {
 }
 
 pre {
-  width: 99%;
   padding: 0;
   margin: 0;
+}
+
+table {
+	width: 60%;
+	margin-left: auto;
+  	margin-right: auto;  
+	padding: 0;
+	border: none;
+}
+
+tr {
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+td {
+	vertical-align: top;
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+#samples {
+	margin-right: 1em;
+	width: 33%;
+}
+
+#pattern {
+	width: 67%;
+	font-size: xx-small;
 }

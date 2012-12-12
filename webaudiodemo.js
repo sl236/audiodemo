@@ -8,6 +8,46 @@ var boot = null;
 (function(){
 // -----------------
 
+function Hex(data,digits)
+{
+	var result = (data|0).toString(16);
+	digits=digits||0;
+	while( result.length < digits )
+	{
+		result='0'+result;
+	}
+	return result;
+}
+
+var blanks = ['', ' ', '  ', '   '];
+function digitsOrBlanks(data,count)
+{
+	return data?Hex(data,count):blanks[count];
+}
+
+function generatePatternHTML( pattern, channelCount, idbase )
+{
+	var result = '<div class="pattern">';
+	var div = 0;
+	while( div < pattern.length )
+	{
+		var line = '<pre id="'+idbase+'_'+div+'">  '+Hex(div,2)+":  ";
+		for( var j = 0; j < channelCount; ++j, ++div )
+		{
+			var ddat = pattern[div];
+			var dtext = digitsOrBlanks(ddat.sample,2)+" "
+						+digitsOrBlanks(ddat.param,3)+" "
+						+(ddat.effect? (Hex(ddat.effect)+Hex(ddat.X)+Hex(ddat.Y)) : "   ");
+			line += "|" + dtext+"|  ";
+		}
+		result += line + "</pre>";
+	}
+	result += '</div>';
+	return result;
+}
+
+// ----
+
 function gotModule( data )
 {
 	var mod = new TrackerModule(data);
@@ -15,6 +55,12 @@ function gotModule( data )
 	// display some info
 	var channelCount = mod.GetChannelCount();
 	var text = '<b>js.audiodemo</b>';
+	
+	var patternHTMLs = [ ];
+	for( var i = 0; i < mod.patternData.length; i++ )
+	{
+		patternHTMLs[i] = generatePatternHTML( mod.patternData[i], channelCount, 'pat' );
+	}	
 	
 	text += '<hr />';		
 	text += '<div>';
@@ -37,7 +83,7 @@ function gotModule( data )
 	var h = Math.floor( playtime/60 );
 	playtime = h? h + ':' + m + ':' + s : m + ':' + s;
 	
-	text += '<div style="width: 20%">';
+	text += '<table><td id="samples">';
 	text += '<pre>' + mod.GetTitle() + ': ' + mod.GetMagic() + " / " + playtime + "</pre>";	
 	var samples = mod.GetSamples();
 	
@@ -45,7 +91,7 @@ function gotModule( data )
 	{
 		text += '<pre id="smpl' + i + '">' + i + ' : ' + samples[i].title + ' / ' + samples[i].len + "</pre>";
 	}
-	text += '</div>';
+	text += '</td><td id="pattern"></td></table>';
     text += '<hr />';
     text += '<a href="https://github.com/sl236/audiodemo">GitHub repository</a>';
 	$('body').html(text);
@@ -78,8 +124,31 @@ function gotModule( data )
 	// arrange for some visualisation
 	var channels = handle.GetChannels();
 	var currSampleElt = [];
+	var lastPos = -1;
+	var lastDiv = -1;
 	
 	setInterval( function() {
+		{
+			var pos = handle.m_pos;
+			var div = handle.m_div;
+			if( pos != lastPos )
+			{
+				$('#pattern').html(patternHTMLs[pos]);
+				lastPos = pos;
+			}
+			var elt = document.getElementById('pat_'+lastDiv);
+			if( elt )
+			{
+				elt.style.background = '#fff';
+			}
+			var elt = document.getElementById('pat_'+div);
+			if( elt )
+			{
+				elt.style.background = '#ded';
+			}
+			lastDiv = div;
+		}
+		
 		for( var i = 0; i < channelCount; i++ )
 		{
 			var pitch = channels[i].GetCurrentPitch();

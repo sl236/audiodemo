@@ -88,16 +88,16 @@ for( var i = 0; i < patternCount; i++ )
 	var pattern = mod.patternData[i];
 	while( div < pattern.length )
 	{
-		var line = Hex(div,2)+":  |";
+		var line = Hex(div,2)+":  ";
 		for( var j = 0; j < channelCount; ++j, ++div )
 		{
+			line += "|";
 			var ddat = pattern[div];
 			var dtext = digitsOrBlanks(ddat.sample,2)+" "
 						+digitsOrBlanks(ddat.param,3)+" "
 						+(ddat.effect? (Hex(ddat.effect)+Hex(ddat.X)+Hex(ddat.Y)) : "   ");
-			line += dtext+"|  |";
+			line += dtext+"|  ";
 		}
-		line +="|";
 		print(line);
 	}
 }
