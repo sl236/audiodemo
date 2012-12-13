@@ -160,7 +160,7 @@ function gotModule( data )
 		
 		for( var i = 0; i < channelCount; i++ )
 		{
-			var pitch = channels[i].GetCurrentPitch();
+			var pitch = channels[i].GetCurrentPeriod();
 			var vol = channels[i].GetCurrentVolume();
 			var sampleIndex = channels[i].GetCurrentSampleIndex();
 			var bgcol = '#fff';
