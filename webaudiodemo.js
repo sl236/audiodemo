@@ -190,7 +190,7 @@ function gotModule( data )
 				currSampleElt[i].style.background = bgcol;
 			}
 
-			propThroughElt.width(Math.floor(100 * (handle.GetPos() / handle.GetLength())));
+			propThroughElt.width(Math.floor(100 * handle.GetPropThrough()));
 		}
 	}, 100 );
 }

@@ -292,28 +292,37 @@ function Channel()
 	this.m_data = null;
 	this.m_loopStart = 0;
 	this.m_loopEnd = 0;
-	this.m_repeated = 0;
+	this.m_loopEndData = 0;
+	this.m_repeat = 0;
 	this.m_period = 0;
-	this.m_arpeggio = 0;
+	this.m_effectPeriod = 0;
 	this.m_channelVolume = 0.5;
 	this.m_sampleVolume = 0;
+	this.m_effectVolume = 0;
 	this.m_pos = 0;
 	this.m_clocks = 0;
 }
 
-Channel.prototype.GetCurrentPitch = function()
+Channel.prototype.GetCurrentPeriod = function()
 {
-	return this.m_period;
+	if( !this.m_period ) { return 0; }
+	var p = (this.m_period * this.m_finetune) + this.m_effectPeriod;
+	p = (p<54)?54:((p>1814)?1814:p);
+	return p;
 }
 
 Channel.prototype.GetCurrentVolume = function()
 {
-	return this.m_period ? this.m_sampleVolume * this.m_channelVolume : 0;
+	if( !this.m_period ) { return 0; }
+	var v = this.m_sampleVolume + this.m_effectVolume;
+	v = (v<0)?0:((v>1)?1:v);
+	return v * this.m_channelVolume;
 }
 
 Channel.prototype.GetCurrentSampleIndex = function()
 {
-	return this.m_period ? this.m_lastSampleIdx : 0;
+	if( !this.m_period ) { return 0; }
+	return this.m_lastSampleIdx;
 }
 
 Channel.prototype.SetVolume = function( _volume )
@@ -345,9 +354,7 @@ Channel.prototype.Play = function( _data, _bank )
 	
 			default:
 				{
-					this.m_repeated = 0;
-					this.m_arpeggioAdjust = 0;
-					this.m_basePeriod = _data.param * 2;
+					this.m_period = _data.param * 2;
 					this.m_pos = 0;
 					this.m_clocks = 0;
 					
@@ -358,11 +365,12 @@ Channel.prototype.Play = function( _data, _bank )
 						this.m_data = sampleData.pcm;
 						this.m_loopStart = sampleData.repeat_start;
 						this.m_loopEnd = sampleData.repeat_length ? (sampleData.repeat_start + sampleData.repeat_length) : 0;
+						this.m_loopEndData = sampleData.repeat_length ? sampleData.pcm[this.m_loopStart] : sampleData.pcm[sampleData.pcm.length-1];
 						this.m_finetune = sampleData.finetune;
 						this.m_sampleVolume = sampleData.volume;
 					}
 						
-					this.m_period = this.m_basePeriod * this.m_finetune;
+					this.m_repeat = this.m_data ? this.m_data.length : 0;
 				}
 			break;
 		}
@@ -371,9 +379,17 @@ Channel.prototype.Play = function( _data, _bank )
 	this.Tick(0);
 }
 
+Channel.prototype.Retrigger = function()
+{
+	this.m_pos = 0;
+	this.m_clocks = 0;
+	this.m_repeat = this.m_data ? this.m_data.length : 0;	
+}
+
 Channel.prototype.Tick = function( _tick, pos, div )
 {
-	this.m_arpeggio = 0;
+	var effectPeriod = 0;
+	var effectVolume = 0;
 	
 	switch( this.m_effect )
 	{
@@ -381,11 +397,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				switch( _tick % 3 )
 				{
 					case 1:
-							this.m_arpeggio = this.m_basePeriod * this.m_finetune * (Math.pow( c12throot2, this.m_effectX ) - 1);
+							effectPeriod = this.m_period * (Math.pow( c12throot2, this.m_effectX ) - 1);
 						break;
 						
 					case 2:
-							this.m_arpeggio = this.m_basePeriod * this.m_finetune * (Math.pow( c12throot2, this.m_effectY ) - 1);
+							effectPeriod = this.m_period * (Math.pow( c12throot2, this.m_effectY ) - 1);
 						break;
 				}			
 			break;
@@ -394,14 +410,12 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				if( _tick )
 				{
 					this.m_period -= this.m_effectX * 16 + this.m_effectY;
-					if(this.m_period < 54) { this.m_period = 54; }
 				}
 			break;
 		case 2:		// portamento down
 				if( _tick )
 				{
 					this.m_period += this.m_effectX * 16 + this.m_effectY;
-					if(this.m_period > 1814) { this.m_period = 1814; }
 				}
 			break;
 		case 3:		// slide to note
@@ -435,13 +449,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				{
 					if( this.m_effectX )
 					{
-						this.m_sampleVolume += (this.m_effectX)/64;
-						this.m_sampleVolume = (this.m_sampleVolume>1) ? 1 : this.m_sampleVolume;
+						effectVolume = this.m_effectVolume + (this.m_effectX)/64;
 					}
 					else if( this.m_effectY )
 					{
-						this.m_sampleVolume -= (this.m_effectY)/64;
-						this.m_sampleVolume = (this.m_sampleVolume<0) ? 0 : this.m_sampleVolume;
+						effectVolume = this.m_effectVolume - (this.m_effectY)/64;
 					}
 				
 					if( this.m_slideToNote < this.m_period )
@@ -460,13 +472,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				{
 					if( this.m_effectX )
 					{
-						this.m_sampleVolume += (this.m_effectX)/64;
-						this.m_sampleVolume = (this.m_sampleVolume>1) ? 1 : this.m_sampleVolume;
+						effectVolume = this.m_effectVolume + (this.m_effectX)/64;
 					}
 					else if( this.m_effectY )
 					{
-						this.m_sampleVolume -= (this.m_effectY)/64;
-						this.m_sampleVolume = (this.m_sampleVolume<0) ? 0 : this.m_sampleVolume;
+						effectVolume = this.m_effectVolume - (this.m_effectY)/64;
 					}
 				}
 			break;
@@ -475,24 +485,22 @@ Channel.prototype.Tick = function( _tick, pos, div )
 		case 8:		// Set panning position (TODO)
 			break;
 		case 9:		// Set sample offset
-				this.m_pos = (this.m_effectX * 4096 + this.m_effectY * 256) * 2;
-				this.m_clocks = 0;
-				this.m_effect = 0;
-				this.m_effectX = 0;
-				this.m_effectY = 0;
+				if( !_tick )
+				{
+					this.Retrigger();
+					this.m_pos = (this.m_effectX * 4096 + this.m_effectY * 256) * 2;
+				}
 			break;
 		case 0xA:	// Volume slide
 				if( _tick )
 				{
 					if( this.m_effectX )
 					{
-						this.m_sampleVolume += (this.m_effectX)/64;
-						this.m_sampleVolume = (this.m_sampleVolume>1) ? 1 : this.m_sampleVolume;
+						effectVolume = this.m_effectVolume + (this.m_effectX)/64;
 					}
 					else if( this.m_effectY )
 					{
-						this.m_sampleVolume -= (this.m_effectY)/64;
-						this.m_sampleVolume = (this.m_sampleVolume<0) ? 0 : this.m_sampleVolume;
+						effectVolume = this.m_effectVolume - (this.m_effectY)/64;
 					}
 				}
 			break;
@@ -506,7 +514,6 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							if( !_tick )
 							{
 								this.m_period -= this.m_effectY;
-								if(this.m_period < 54) { this.m_period = 54; }
 							}
 						break;
 						
@@ -514,32 +521,27 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							if( !_tick )
 							{
 								this.m_period += this.m_effectY;
-								if(this.m_period > 1814) { this.m_period = 1814; }
 							}
 						break;
 					
 					case 9: // retrigger sample
 							if( this.m_effectY && !(_tick % this.m_effectY) )
 							{
-								this.m_pos = 0;
-								this.m_clocks = 0;
-								this.m_repeated = 0;
+								this.Retrigger();
 							}
 						break;
 						
 					case 0xA: // volume up
 							if( !_tick )
 							{
-								this.m_sampleVolume += (this.m_effectY)/64;
-								this.m_sampleVolume = (this.m_sampleVolume>1) ? 1 : this.m_sampleVolume;
+								effectVolume = this.m_effectVolume + (this.m_effectY)/64;
 							}
 						break;
 						
 					case 0xB: // volume down
 							if( !_tick )
 							{
-								this.m_sampleVolume -= (this.m_effectY)/64;
-								this.m_sampleVolume = (this.m_sampleVolume<0) ? 0 : this.m_sampleVolume;
+								effectVolume = this.m_effectVolume - (this.m_effectY)/64;
 							}
 						break;
 						
@@ -553,77 +555,67 @@ Channel.prototype.Tick = function( _tick, pos, div )
 					case 0xD: // delay sample
 							if( _tick < this.m_effectY )
 							{
+								this.Retrigger();
 								this.m_sampleVolume = 0;
-								this.m_pos = 0;
-								this.m_clocks = 0;
 							}
 						break;
 				}
 			break;
 	}
+
+	this.m_effectPeriod = effectPeriod;
+	this.m_effectVolume = effectVolume;
 }
 
 Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 {
 	var data = this.m_data;
-	if (!data || (this.m_period<1)) { return; }
+	if (!data||(this.m_period<1)) { return; }
 
 	var dpos = _start;
 	var dend = _start + _len;
-	var spos = this.m_pos;
-	var sclocks = this.m_clocks;
-	var send = this.m_repeated ? this.m_loopEnd : data.length;
-	var period = this.m_period + this.m_arpeggio;
-	var destPeriod = _destPeriod;
-	var volume = this.m_sampleVolume * this.m_channelVolume;
-	if(period<1) { return; }
-
-	var csample = data[spos];
-	var nsample = ((spos+1)<send) ? data[spos+1] : (this.m_loopEnd ? data[this.m_loopStart] : csample);
+	var send = this.m_repeat;
 	
 	while( dpos < dend )
 	{
-		
+		var period = this.GetCurrentPeriod();		
+		var volume = this.GetCurrentVolume();
+		var csample = data[this.m_pos];
+		var nsample = ((this.m_pos+1)<this.m_repeat) ? data[this.m_pos+1] : this.m_loopEndData;
+
 		var left = dend - dpos;
-		var runlength = Math.ceil((period - sclocks)/destPeriod);
+		var runlength = Math.ceil((period - this.m_clocks)/_destPeriod);
 		runlength = runlength < left ? runlength : left;
 		if(runlength<1) { break; }
 		
 		runend = dpos + runlength;
 
-		var prop = (sclocks/period);
-		var propinc = (destPeriod/period);
-		while( dpos < runend )
+		var prop = (this.m_clocks/period);
+		var propinc = (_destPeriod/period);
+		while( dpos < runend ) // NB. this is the mixer's innermost loop!
 		{
-			var t = prop; // lerp			
-			//var t = prop*prop*prop*(prop*(prop*6 - 15) + 10); // Perlin's smootherstep
-			_dest[dpos++] += (t * nsample + (1-t) * csample) * volume;
+			_dest[dpos++] += (prop * nsample + (1-prop) * csample) * volume;
 			prop += propinc;
 		}
 		
-		sclocks += destPeriod * runlength;
+		this.m_clocks += _destPeriod * runlength;
 
-		if( sclocks >= period )
+		if( this.m_clocks >= period )
 		{
-			sclocks -= period;
-			++spos;
-			if (spos >= send)
+			this.m_clocks -= period;
+			++this.m_pos;
+			if (this.m_pos >= this.m_repeat)
 			{
 				if (!this.m_loopEnd)
 				{
 					this.m_period = 0;
 					return;
 				}
-				spos = this.m_loopStart;
-				send = this.m_loopEnd;
-				this.m_repeated = 1;
+				this.m_pos = this.m_loopStart;
+				this.m_repeat = this.m_loopEnd;
 			}
-			csample = nsample;
-			nsample = ((spos+1)<send) ? data[spos+1] : (this.m_loopEnd ? data[this.m_loopStart] : csample);
 		}
 	}
-	this.m_pos = spos;
-	this.m_clocks = sclocks;
 }
 
 // -- 
@@ -688,8 +680,10 @@ TrackerPlaybackCursor.prototype.onStart = function( _mixer )	{ }
 TrackerPlaybackCursor.prototype.onFinish = function( _mixer )	{ }
 TrackerPlaybackCursor.prototype.GetLength = function()			{ return this.m_sampleLength; }
 TrackerPlaybackCursor.prototype.GetPos = function()				{ return this.m_samplesPlayed; }
-TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_sampleLength - this.m_samplesPlayed; }
+TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_playing ? (Mixer.BufferSize * 2) : 0; } // stay attached to mixer unless we are explicitly stopped
 TrackerPlaybackCursor.prototype.SetVolume = function( _volume )	{ this.m_volume = _volume; }
+TrackerPlaybackCursor.prototype.Stop = function()				{ this.m_playing = 0; } // cursor is useless after this
+TrackerPlaybackCursor.prototype.GetPropThrough = function()		{ return this.m_samplesPlayed / this.m_sampleLength; }
 TrackerPlaybackCursor.prototype.GetSamplesPerTick = function()
 {
 	var samplesPerDivision = (Mixer.SampleRate * this.m_ticksPerDivision) / ( 6 * this.m_divisionsPerSecond );
