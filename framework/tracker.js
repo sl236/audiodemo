@@ -213,7 +213,7 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 						
 					case 0xD:	// pattern break
 							nextpos = pos + 1;
-							nextdiv = ddat.X * 10 + ddat.Y;
+							nextdiv = (ddat.X * 10 + ddat.Y)*4;
 						break;
 
 					case 0xF:	// set speed
@@ -572,7 +572,7 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 	var destPeriod = _destPeriod;
 	var loopData = this.m_loopEnd ? data[this.m_loopStart] : 0;
 	var volume = this.m_sampleVolume * this.m_channelVolume;
-	if(!period) { return; }
+	if(period<1) { return; }
 
 	var csample = data[spos];
 	var nsample = ((spos+1)<send) ? data[spos+1] : loopData;
@@ -583,6 +583,8 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 		var left = dend - dpos;
 		var runlength = Math.ceil((period - sclocks)/destPeriod);
 		runlength = runlength < left ? runlength : left;
+		if(runlength<1) { break; }
+		
 		runend = dpos + runlength;
 
 		var prop = (sclocks/period);
@@ -681,9 +683,9 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 TrackerPlaybackCursor.prototype.onStart = function( _mixer )	{ }
 TrackerPlaybackCursor.prototype.onFinish = function( _mixer )	{ }
 TrackerPlaybackCursor.prototype.GetLength = function()			{ return this.m_sampleLength; }
-TrackerPlaybackCursor.prototype.GetPos = function()			{ return this.m_samplesPlayed; }
+TrackerPlaybackCursor.prototype.GetPos = function()				{ return this.m_samplesPlayed; }
 TrackerPlaybackCursor.prototype.GetLeft = function()			{ return this.m_sampleLength - this.m_samplesPlayed; }
-TrackerPlaybackCursor.prototype.SetVolume = function( _volume ){ this.m_volume = _volume; }
+TrackerPlaybackCursor.prototype.SetVolume = function( _volume )	{ this.m_volume = _volume; }
 TrackerPlaybackCursor.prototype.GetSamplesPerTick = function()
 {
 	var samplesPerDivision = (Mixer.SampleRate * this.m_ticksPerDivision) / ( 6 * this.m_divisionsPerSecond );
@@ -704,6 +706,31 @@ TrackerPlaybackCursor.prototype.Pause = function()
 TrackerPlaybackCursor.prototype.IsPaused = function()
 {
 	return this.m_paused;
+}
+
+TrackerPlaybackCursor.prototype.Seek = function( time )
+{
+	var key = this.m_mod.m_keys[0];
+	var idx = 1;
+	
+	while( 
+			(idx < this.m_mod.m_keys.length)
+		&&	(this.m_mod.m_keys[idx].time < time)
+	)
+	{
+		key = this.m_mod.m_keys[idx++];		
+	}
+	
+	if( key )
+	{
+		this.m_pos = key.pos;
+		this.m_div = key.div;
+		this.m_tick = 0;
+		this.m_samples = 0;
+		this.m_ticksPerDivision = key.tickRate;
+		this.m_divisionsPerSecond = key.bpm*4/60;
+		this.m_samplesPlayed = time*Mixer.SampleRate;
+	}
 }
 
 TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
@@ -778,7 +805,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 							
 						case 0xD:	// pattern break
 								pos++;
-								nextdiv = ddat.X * 10 + ddat.Y;
+								nextdiv = (ddat.X * 10 + ddat.Y)*4;
 								patternIndex = this.m_mod.footer.patterns[pos];
 								divisionData = this.m_mod.patternData[patternIndex];
 							break;

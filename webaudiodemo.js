@@ -25,9 +25,9 @@ function digitsOrBlanks(data,count)
 	return data?Hex(data,count):blanks[count];
 }
 
-function generatePatternHTML( pattern, channelCount, idbase )
+function generatePatternHTML( pattern, patIndex, channelCount, idbase )
 {
-	var result = '<div class="pattern">';
+	var result = '<div class="pattern">Pattern ' + patIndex;
 	var div = 0;
 	while( div < pattern.length )
 	{
@@ -59,7 +59,7 @@ function gotModule( data )
 	var patternHTMLs = [ ];
 	for( var i = 0; i < mod.patternData.length; i++ )
 	{
-		patternHTMLs[i] = generatePatternHTML( mod.patternData[i], channelCount, 'pat' );
+		patternHTMLs[i] = generatePatternHTML( mod.patternData[i], i, channelCount, 'pat' );
 	}	
 	
 	text += '<hr />';		
@@ -71,7 +71,7 @@ function gotModule( data )
 		text += '<span id="pause" style="border: 1px solid black;" onclick="boot.pause()">pause</span>';
 	text += '</div>';
 	text += '<br />';
-	text += '<div class="progress"><div id="propthrough" style="width: 0px; height: 10px; background: black;"></div></div>';
+	text += '<div class="progress" id="progress"><div id="propthrough" style="width: 0px; height: 10px; background: black;"></div></div>';
 	
     text += '<hr>';
 	var playtime = Math.ceil( mod.GetPlayTime() );
@@ -98,7 +98,7 @@ function gotModule( data )
 	var pauseElt = $('#pause');
 	var propThroughElt = $('#propthrough');
 	pauseElt.hide();
-	
+		
 	var channelElts = [ ];
 	for( var i = 0; i < channelCount; i++ )
 	{
@@ -114,12 +114,21 @@ function gotModule( data )
 	// play the module
 	var handle = mod.Play();
 	handle.SetVolume( 0.8 );
+
+	// remote control
 	boot.pause = function()
 	{
 		handle.Pause();
 		pauseElt.html( handle.IsPaused() ? 'play' : 'pause' );
 	}
 	pauseElt.show();
+	
+	var progressElt = $('#progress');
+	progressElt.click(function(e){
+		var offset = $(this).offset();
+	    var time = ((e.pageX - offset.left)/100)*mod.GetPlayTime();
+	    handle.Seek(time);
+    });
 	
 	// arrange for some visualisation
 	var channels = handle.GetChannels();
