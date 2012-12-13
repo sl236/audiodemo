@@ -755,6 +755,12 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 	var tick = this.m_tick;
 	var samples = this.m_samples;
 
+	if( pos >= this.m_mod.footer.songPositions )
+	{
+		this.m_paused = 1;
+		return;
+	}
+
 	var dpos = _start;
 	var dsamplesPerTick = this.GetSamplesPerTick();
 	var channels = this.m_channels;
@@ -824,11 +830,7 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 				
 				if( pos >= this.m_mod.footer.songPositions )
 				{
-					this.m_pos = 0;
-					this.m_div = 0;
-					this.m_tick = 0;
-					this.m_samples = 0;
-					this.m_playing = 0;
+					this.m_paused = 1;
 					return;
 				}
 
