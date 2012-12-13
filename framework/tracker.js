@@ -178,8 +178,10 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 	}
 
 	this.channelCount = trackerMagics[this.footer.magic] ? trackerMagics[this.footer.magic].channels : 4;
-	this.m_infinite = 0;
+	this.m_infinite = true; // obey looping by default
 	this.m_playTime = 0;
+	this.m_patternLoopPos = -1;
+	this.m_patternLoopDiv = -1;
 	this.m_keys = [ ];
 
 	// calculate piece length and key list
@@ -209,6 +211,11 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 					case 0xB:	// jump to order
 							nextpos = ddat.X * 16 + ddat.Y;
 							nextdiv = 0;
+							ddat.sampleCount = time * Mixer.SampleRate;
+							if( keys[loopmap[(nextpos*1024)+nextdiv]] )
+							{
+								ddat.sampleCount = keys[loopmap[(nextpos*1024)+nextdiv]-1].time * Mixer.SampleRate;
+							}
 						break;
 						
 					case 0xD:	// pattern break
@@ -231,24 +238,26 @@ TrackerModule.prototype.__init__ = function( _base64Data )
 				}
 			}
 
-			var key = (pos*1024)+div;
+			if( nextdiv >= 64*4 )
+			{
+				nextpos = pos + 1;
+				nextdiv = 0;
+			}
+
+			time += 1 / ( (6/tickRate) * (bpm*4/60) );
+			keys.push( {'time': time, 'pos': pos, 'div': div, 'bpm': bpm, 'tickRate': tickRate } );
+
+			var key = (nextpos*1024)+nextdiv;
 			if( loopmap[key] ) // detect infinite loops
 			{
-				this.m_infinite = true;
+				this.m_patternLoopPos = pos;
+				this.m_patternLoopDiv = div;
 				this.m_playTime = time;
 				return;
 			}
 
-			keys.push( {'time': time, 'pos': pos, 'div': div, 'bpm': bpm, 'tickRate': tickRate } );
-			loopmap[key] = 1;
-			time += 1 / ( (6/tickRate) * (bpm*4/60) );
-
+			loopmap[key] = keys.length;
 			div = nextdiv;
-			if( div >= 64*4 )
-			{
-				nextpos = pos + 1;
-				div = 0;
-			}
 			pos = nextpos;
 		};
 		this.m_playTime = time;
@@ -449,11 +458,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				{
 					if( this.m_effectX )
 					{
-						effectVolume = this.m_effectVolume + (this.m_effectX)/64;
+						this.m_sampleVolume += (this.m_effectX)/64;
 					}
 					else if( this.m_effectY )
 					{
-						effectVolume = this.m_effectVolume - (this.m_effectY)/64;
+						this.m_sampleVolume -= (this.m_effectY)/64;
 					}
 				
 					if( this.m_slideToNote < this.m_period )
@@ -472,11 +481,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				{
 					if( this.m_effectX )
 					{
-						effectVolume = this.m_effectVolume + (this.m_effectX)/64;
+						this.m_sampleVolume += (this.m_effectX)/64;
 					}
 					else if( this.m_effectY )
 					{
-						effectVolume = this.m_effectVolume - (this.m_effectY)/64;
+						this.m_sampleVolume -= (this.m_effectY)/64;
 					}
 				}
 			break;
@@ -496,11 +505,11 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				{
 					if( this.m_effectX )
 					{
-						effectVolume = this.m_effectVolume + (this.m_effectX)/64;
+						this.m_sampleVolume += (this.m_effectX)/64;
 					}
 					else if( this.m_effectY )
 					{
-						effectVolume = this.m_effectVolume - (this.m_effectY)/64;
+						this.m_sampleVolume -= (this.m_effectY)/64;
 					}
 				}
 			break;
@@ -534,14 +543,14 @@ Channel.prototype.Tick = function( _tick, pos, div )
 					case 0xA: // volume up
 							if( !_tick )
 							{
-								effectVolume = this.m_effectVolume + (this.m_effectY)/64;
+								this.m_sampleVolume += (this.m_effectY)/64;
 							}
 						break;
 						
 					case 0xB: // volume down
 							if( !_tick )
 							{
-								effectVolume = this.m_effectVolume - (this.m_effectY)/64;
+								this.m_sampleVolume -= (this.m_effectY)/64;
 							}
 						break;
 						
@@ -642,7 +651,7 @@ TrackerPlaybackCursor.prototype.__init__ = function( _module )
 
 	var patternIndex = this.m_mod.footer.patterns[0];
 	var divisionData = this.m_mod.patternData[patternIndex];
-	this.m_sampleLength = ((this.m_mod.GetPlayTime()+0.5) * Mixer.SampleRate);
+	this.m_sampleLength = this.m_mod.GetPlayTime() * Mixer.SampleRate;
 	
 	for( var i = 0; i < _module.channelCount; i++ )
 	{
@@ -801,6 +810,12 @@ TrackerPlaybackCursor.prototype.Render = function( _dest, _start, _len )
 					switch( ddat.effect )
 					{
 						case 0xB:	// jump to order
+								if( (!this.m_infinite) && ( pos == this.m_mod.m_patternLoopPos ) && ( div == this.m_mod.m_patternLoopDiv ) )
+								{
+									this.m_paused = 1;
+									return;
+								}
+								this.m_samplesPlayed = ddat.sampleCount;
 								pos = ddat.X * 16 + ddat.Y;
 								nextdiv = 0;
 								patternIndex = this.m_mod.footer.patterns[pos];
