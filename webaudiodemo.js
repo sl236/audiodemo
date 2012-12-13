@@ -138,7 +138,7 @@ function gotModule( data )
 	
 	setInterval( function() {
 		{
-			var pos = handle.m_pos;
+			var pos = mod.footer.patterns[handle.m_pos];
 			var div = handle.m_div;
 			if( pos != lastPos )
 			{
