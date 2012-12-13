@@ -303,17 +303,17 @@ function Channel()
 
 Channel.prototype.GetCurrentPitch = function()
 {
-	return this.m_data ? this.m_period : 0;
+	return this.m_period;
 }
 
 Channel.prototype.GetCurrentVolume = function()
 {
-	return this.m_data ? this.m_sampleVolume * this.m_channelVolume : 0;
+	return this.m_period ? this.m_sampleVolume * this.m_channelVolume : 0;
 }
 
 Channel.prototype.GetCurrentSampleIndex = function()
 {
-	return this.m_data ? this.m_lastSampleIdx : 0;
+	return this.m_period ? this.m_lastSampleIdx : 0;
 }
 
 Channel.prototype.SetVolume = function( _volume )
@@ -394,12 +394,14 @@ Channel.prototype.Tick = function( _tick, pos, div )
 				if( _tick )
 				{
 					this.m_period -= this.m_effectX * 16 + this.m_effectY;
+					if(this.m_period < 54) { this.m_period = 54; }
 				}
 			break;
 		case 2:		// portamento down
 				if( _tick )
 				{
 					this.m_period += this.m_effectX * 16 + this.m_effectY;
+					if(this.m_period > 1814) { this.m_period = 1814; }
 				}
 			break;
 		case 3:		// slide to note
@@ -504,6 +506,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							if( !_tick )
 							{
 								this.m_period -= this.m_effectY;
+								if(this.m_period < 54) { this.m_period = 54; }
 							}
 						break;
 						
@@ -511,6 +514,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							if( !_tick )
 							{
 								this.m_period += this.m_effectY;
+								if(this.m_period > 1814) { this.m_period = 1814; }
 							}
 						break;
 					
@@ -519,6 +523,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							{
 								this.m_pos = 0;
 								this.m_clocks = 0;
+								this.m_repeated = 0;
 							}
 						break;
 						
@@ -534,7 +539,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 							if( !_tick )
 							{
 								this.m_sampleVolume -= (this.m_effectY)/64;
-								this.m_sampleVolume = (this.m_sampleVolume>1) ? 1 : this.m_sampleVolume;
+								this.m_sampleVolume = (this.m_sampleVolume<0) ? 0 : this.m_sampleVolume;
 							}
 						break;
 						
@@ -561,7 +566,7 @@ Channel.prototype.Tick = function( _tick, pos, div )
 Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 {
 	var data = this.m_data;
-	if (!data) { return; }
+	if (!data || (this.m_period<1)) { return; }
 
 	var dpos = _start;
 	var dend = _start + _len;
@@ -570,12 +575,11 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 	var send = this.m_repeated ? this.m_loopEnd : data.length;
 	var period = this.m_period + this.m_arpeggio;
 	var destPeriod = _destPeriod;
-	var loopData = this.m_loopEnd ? data[this.m_loopStart] : 0;
 	var volume = this.m_sampleVolume * this.m_channelVolume;
 	if(period<1) { return; }
 
 	var csample = data[spos];
-	var nsample = ((spos+1)<send) ? data[spos+1] : loopData;
+	var nsample = ((spos+1)<send) ? data[spos+1] : (this.m_loopEnd ? data[this.m_loopStart] : csample);
 	
 	while( dpos < dend )
 	{
@@ -603,11 +607,11 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 		{
 			sclocks -= period;
 			++spos;
-			if (spos == send)
+			if (spos >= send)
 			{
 				if (!this.m_loopEnd)
 				{
-					this.m_data = null;
+					this.m_period = 0;
 					return;
 				}
 				spos = this.m_loopStart;
@@ -615,7 +619,7 @@ Channel.prototype.Mix = function( _dest, _start, _len, _destPeriod )
 				this.m_repeated = 1;
 			}
 			csample = nsample;
-			nsample = ((spos+1)<send) ? data[spos+1] : loopData;
+			nsample = ((spos+1)<send) ? data[spos+1] : (this.m_loopEnd ? data[this.m_loopStart] : csample);
 		}
 	}
 	this.m_pos = spos;
