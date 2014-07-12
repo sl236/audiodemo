@@ -383,10 +383,23 @@ Mixer.Init = function()
 	try
 	{
 		currentMixSample = 0;
-		webAudioContext = webAudioContext || (new webkitAudioContext());
+		webAudioContext = webAudioContext;
+		try
+		{
+			webAudioContext = webAudioContext || (new webkitAudioContext());
+		}
+		catch(e)
+		{
+			webAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+		}
 		Mixer.SampleRate = webAudioContext.sampleRate;
 		webAudioContext.destination.numberOfChannels = Mixer.Channels;
-		webAudioContextJSNode = webAudioContextJSNode || webAudioContext.createJavaScriptNode(Mixer.BufferLength, 0, Mixer.Channels);
+		webAudioContextJSNode = webAudioContextJSNode;
+		try {
+			webAudioContextJSNode = webAudioContextJSNode || webAudioContext.createJavaScriptNode(Mixer.BufferLength, 0, Mixer.Channels);
+		} catch(e) {
+			webAudioContextJSNode = webAudioContext.createScriptProcessor(Mixer.BufferLength, 0, Mixer.Channels);
+		}
 		webAudioContextJSNode.onaudioprocess = function(e)
 		{
 			var dest = e.outputBuffer.getChannelData(0);
